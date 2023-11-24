@@ -16,12 +16,40 @@ IIFE는 함수를 정의하고 즉시 호출하는 패턴으로, 스크립트가
 INCH 객체가 반환되어 전역 변수 INCH에 할당
 결과적으로 스크립트가 로드되면 IIFE가 즉시 실행되고, <code>processElement</code> 함수가 DOM을 탐색하여 이벤트 리스너를 등록하게 된다. 이후에는 사용자의 상호작용에 따라 해당 이벤트 리스너가 호출되어 API 요청이 발생할 것이다.
 
+<hr />
+
 ### htmx 초기 세팅(2)
 
-1. hx-target이 추가되었다.
+- commit: 71cfdaa8ef444cda42ec57f517c8612e39fcece3
 
-2. hx-swap-style이 추가되었다.
+1. <code>hx-target</code>이 추가되었다.
+
+2. <code>hx-swap-style</code>이 추가되었다.
    현재는 outerHTML, append만 지원하는 거 같다.
 
-3. 현재는 hx-get 기능만 있어 get 메소드만 지원하나
+3. 현재는 <code>hx-get</code> 기능만 있어 get 메소드만 지원하나
    추후 다른 메소드까지 지원할 수 있도록 하려는 것 같다.
+
+<hr />
+
+### htmx 초기 세팅(3)
+
+- commit:
+
+1. <code>hx-swap-style</code>의 속성 값으로 prepend가 추가되었다.
+2. <code>makeNode</code>의 함수명이 <code>makeFragment</code>로 변경되었다.
+   <details>
+      <summary>node와 fragment의 차이점</summary>
+      - node
+         DOM에서 모든 노드의 기본 인터페이스를 나타낸다. 단순한 Text도 하나의 node이다.
+         `<p>이것은 <strong>텍스트</strong>입니다.</p>`에서 `텍스트`,`입니다.`가 Text 노드이다.
+         즉, 좀 더 포괄적인 의미가 된다.
+      - fragment
+         fragment는 HTMLElement의 집합이다.
+
+   즉, 해당 함수명을 좀 더 명시적으로 fragment를 만든다는 의미를 내포하기 위해 변경한 것이다.
+   </details>
+
+3. 204 status code는 no content이다. api response가 성공을 해도 204는 swap이 일어나지 않도록 제외시켰는데, 아마 컨텐츠가 없는데 스왑이 일어나니깐 버그가 발생해서 추가한 것 같다.
+
+<hr />

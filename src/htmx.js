@@ -46,7 +46,7 @@ var INCH = INCH || (function(){
      *              새로운 DOM 노드를 반환한다.
      * @returns {DocumentFragment | HTMLElement} 반환되는 DOM 노드, DocumentFragment는 일반적으로 동적으로 생성된 컨텐츠나 여러 요소를 일괄적으로 삽입할 때 사용된다. 즉, node의 집합(여러 HTML 요소를 담고 있다.)
      */
-    function makeNode(resp) {
+    function makeFragment(resp) {
         let range = document.createRange();
         return range.createContextualFragment(resp);
     }
@@ -62,10 +62,20 @@ var INCH = INCH || (function(){
         if (swapStyle === "outerHTML") {
             target.outerHTML = resp;
             processElement(target);
+        } else if (swapStyle === "prepend") {
+            let fragment = makeFragment(resp);
+            for (let i = fragment.children.length - 1; i >= 0; i--) {
+                const child = fragment.children[i];
+                processElement(child);
+                target.insertBefore(child, target.firstChild);
+            }
         } else if (swapStyle === "append") {
-            let newChild = makeNode(resp);
-            processElement(elt);
-            target.appendChild(newChild)
+            let fragment = makeFragment(resp);
+            for (let i = 0; i < fragment.children.length; i++) {
+                const child = fragment.children[i];
+                processElement(child);
+                target.appendChild(child);
+            }
         } else {
             target.innerHTML = resp;
             for (let i = 0; i < target.children.length; i++) {
@@ -87,9 +97,11 @@ var INCH = INCH || (function(){
         request.open('GET', url, true);
         request.onload = function() {
             if(this.status >= 200 && this.status < 400) {
-                // 통신 Success
-                var resp = this.response;
-                swapResponse(elt, resp);
+                if (this.status != 204) {
+                    // 통신 Success
+                    var resp = this.response;
+                    swapResponse(elt, resp);
+                }
             } else {
                 elt.innerHTML = "ERROR";
             }
