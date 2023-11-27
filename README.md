@@ -1,3 +1,5 @@
+# README 겸 commit 상세 changelog
+
 ### htmx 초기 세팅(1)
 
 - commit: bef4e112882abac9e37570c16193a7e540b3df37
@@ -34,7 +36,7 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 
 ### htmx 초기 세팅(3)
 
-- commit:
+- commit: f0a199b4a6601d22766a799507ceaa0f034572c5
 
 1. <code>hx-swap-style</code>의 속성 값으로 prepend가 추가되었다.
 2. <code>makeNode</code>의 함수명이 <code>makeFragment</code>로 변경되었다.
@@ -53,3 +55,12 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 3. 204 status code는 no content이다. api response가 성공을 해도 204는 swap이 일어나지 않도록 제외시켰는데, 아마 컨텐츠가 없는데 스왑이 일어나니깐 버그가 발생해서 추가한 것 같다.
 
 <hr />
+
+### htmx 초기 세팅(4)
+
+- commit:
+
+1. 드디어 <code>hx-swap-style</code>이 <code>hx-swap</code>으로 변경됐다.
+2. click 이벤트 리스너에 이벤트 버블링이 발생했던 거 같다. <code>e.stopPropagation()</code> 함수가 추가됐다.
+3. 테스트를 할 수 있는 index.html이 추가돼었다.
+4. <code>getAttribute</code> 함수가 추가돼었다. data- 접두어에 대응하기 위해 추가되었다.

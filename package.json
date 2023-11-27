@@ -1,0 +1,23 @@
+{
+  "name": "inchTMX",
+  "version": "0.0.1",
+  "description": "HTML Extensions",
+  "main": "src/htmx.js",
+  "repository": "https://github.com/in-ch/htmx-clone",
+  "author": "in-ch <sxin2949@naver.com>",
+  "scripts": {
+    "test": "mocha-chrome test/core.html"
+  },
+  "keywords": [
+    "AJAX",
+    "HTML",
+    "inch"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0",
+    "mocha-chrome": "^2.2.0",
+    "sinon": "^17.0.1"
+  }
+}

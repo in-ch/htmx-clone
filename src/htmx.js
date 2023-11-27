@@ -1,9 +1,19 @@
 /**
  * 일단 IIFE 패턴으로 변수를 선언한다.
  */
-var INCH = INCH || (function(){
+let inchTMX = inchTMX || (function(){
     /**
-     * @param {HTMLElement} elt element ex) 엘리먼트
+     * @param {HTMLElement} elt element
+     * @param {string} qualifiedName 찾으려는 속성명, 예를 들어 <div id="test" />라고 했을 때 qualifiedName는 id가 되고 속성값은 test가 되겠다.
+     * @description data- 접두어를 쓰려고 추가한 메소드인 것 같다.
+     * @returns {null | string} 속성값
+     */
+    function getAttribute(elt, qualifiedName) {
+        return elt.getAttribute(qualifiedName) || elt.getAttribute("data-" + qualifiedName);
+    }
+
+    /**
+     * @param {HTMLElement} elt element
      * @param {string} attributeName 찾으려는 속성명
      * @description 인자로 받은 element에서 인자로 받은 속성을 가진 가장 가까운 element의 해당 속성의 값을 리턴한다.
      *              재귀 형식으로 자식 엘리먼트까지 탐색을 진행한다.
@@ -11,7 +21,7 @@ var INCH = INCH || (function(){
      */
     function getClosestAttributeValue(elt, attributeName)
     {
-        let attribute = elt.getAttribute(attributeName);
+        let attribute = getAttribute(elt, attributeName);
         if(attribute)
         {
             return attribute;
@@ -58,10 +68,15 @@ var INCH = INCH || (function(){
      */
     function swapResponse(elt, resp) {
         let target = getTarget(elt);
-        let swapStyle = getClosestAttributeValue(elt, "hx-swap-style");
+        let swapStyle = getClosestAttributeValue(elt, "hx-swap");
         if (swapStyle === "outerHTML") {
-            target.outerHTML = resp;
-            processElement(target);
+            let fragment = makeFragment(resp);
+            for (let i = fragment.children.length - 1; i >= 0; i--) {
+                const child = fragment.children[i];
+                processElement(child);
+                target.parentElement.insertBefore(child, target.firstChild);
+            }
+            target.parentElement.removeChild(target);
         } else if (swapStyle === "prepend") {
             let fragment = makeFragment(resp);
             for (let i = fragment.children.length - 1; i >= 0; i--) {
@@ -92,14 +107,14 @@ var INCH = INCH || (function(){
      */
     function issueAjaxRequest(elt, url) {
         // XMLHttpRequest 객체는 서버로부터 XML 데이터를 전송받아 처리하는 데 사용됩니다.
-        var request = new XMLHttpRequest();
+        let request = new XMLHttpRequest();
         // open() 메소드의 세 번째 인수로 true를 전달함으로써 비동기식으로 요청을 보낸다.
         request.open('GET', url, true);
         request.onload = function() {
             if(this.status >= 200 && this.status < 400) {
                 if (this.status != 204) {
                     // 통신 Success
-                    var resp = this.response;
+                    let resp = this.response;
                     swapResponse(elt, resp);
                 }
             } else {
@@ -119,8 +134,9 @@ var INCH = INCH || (function(){
      */
     function processElement(elt) {
         if(elt.getAttribute('hx-get')) {
-            elt.addEventListener("click", function(){
-                issueAjaxRequest(elt, elt.getAttribute('hx-get'))
+            elt.addEventListener("click", function(evt){
+                issueAjaxRequest(elt, getAttribute(elt, 'hx-get'));
+                evt.stopPropagation();
             });
         }
         for (let i = 0; i < elt.children.length; i++) {
@@ -142,6 +158,7 @@ var INCH = INCH || (function(){
     });
 
     return {
+        processElement : processElement,
         version: "0.0.1"
     }
 })();
