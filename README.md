@@ -74,3 +74,11 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 3. trigger의 load 기능이 추가되었다. 
 4. 변수 선언 방식이 let에서 var로 변경되었다. -> es6를 지원하지 않는 환경에서만 지원되도록 하기 위함인 것 같다. 
 5. [classes-tool](https://htmx.org/extensions/class-tools/) 이 기능이 추가되었다. hx-add-class라는 속성과 hx-remove-class(나중에 약어로 classes로 변경되는 것 같다.)을 통해서 클래스를 추가하거나 제거할 수 있도록 한다.
+
+### htmx 초기 세팅(6)
+
+- commit: 
+
+1. header를 지원하기 위한 기능들이 추가되었다. -> 추후에 삭제된다.
+2. history 기능이 추가되었다. -> 추후에 삭제된다.
+3. <code>swapResponse</code>에 중복코드가 많아 <code>processResponseNodes</code>를 추가

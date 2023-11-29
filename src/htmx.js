@@ -2,6 +2,20 @@
  * 일단 IIFE 패턴으로 변수를 선언한다.
  */
 var inchTMX = inchTMX || (function(){
+    'use strict';
+
+    function parseInterval(str) {
+        if (str === "null" || str === "false" || str === "") {
+            return null;
+        } else if (str.lastIndexOf("ms") === str.length - 2) {
+            return parseFloat(str.substr(0, str.length - 2));
+        } else if (str.lastIndexOf("s") === str.length - 1) {
+            return parseFloat(str.substr(0, str.length - 1)) * 1000;
+        } else {
+            return 1000;
+        }
+    }
+
     /**
      * @param {HTMLElement} elt element
      * @param {string} qualifiedName 찾으려는 속성명, 예를 들어 <div id="test" />라고 했을 때 qualifiedName는 id가 되고 속성값은 test가 되겠다.
@@ -62,41 +76,166 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
+     * @param {HTMLElement} parent 부모 엘리먼트
+     * @param {string} text api 리스폰스 값 
+     * @param {string} target hx-target의 타겟 엘리먼트 
+     * @description node를 생성한다.
+    */
+    function processResponseNodes(parent, target, text) {
+        var fragment = makeFragment(text);
+        for (var i = fragment.childNodes.length - 1; i >= 0; i--) {
+            var child = fragment.childNodes[i];
+            parent.insertBefore(child, target);
+            if (child.nodeType != Node.TEXT_NODE) {
+                processElement(child);
+            }
+        }
+    }
+
+    /**
+     * @param {HTMLElement} target 스왑을 진행할 element, 부모 element가 될 수도 있고 자식 element가 될 수도 있다.
      * @param {HTMLElement} elt 스왑을 진행할 element, 부모 element가 될 수도 있고 자식 element가 될 수도 있다.
      * @param {HTMLElement} resp 스왑을 통해 바뀔 HTMLElement
+     * @param {HTMLElement} after after 후에 실행될 function
      * @description 실제 swap을 진행한다.
      */
-    function swapResponse(elt, resp) {
-        var target = getTarget(elt);
+    function swapResponse(target, elt, resp, after) {
         var swapStyle = getClosestAttributeValue(elt, "hx-swap");
         if (swapStyle === "outerHTML") {
-            var fragment = makeFragment(resp);
-            for (var i = fragment.children.length - 1; i >= 0; i--) {
-                const child = fragment.children[i];
-                processElement(child);
-                target.parentElement.insertBefore(child, target.firstChild);
-            }
+            processResponseNodes(target.parentElement, target, resp, after);
             target.parentElement.removeChild(target);
         } else if (swapStyle === "prepend") {
-            var fragment = makeFragment(resp);
-            for (var i = fragment.children.length - 1; i >= 0; i--) {
-                const child = fragment.children[i];
-                processElement(child);
-                target.insertBefore(child, target.firstChild);
-            }
+            processResponseNodes(target, target.firstChild, resp, after);
+        } else if (swapStyle === "prependBefore") {
+            processResponseNodes(target.parentElement, target, resp, after);
         } else if (swapStyle === "append") {
-            var fragment = makeFragment(resp);
-            for (var i = 0; i < fragment.children.length; i++) {
-                const child = fragment.children[i];
-                processElement(child);
-                target.appendChild(child);
-            }
+            processResponseNodes(target, null, resp, after);
+        } else if (swapStyle === "appendAfter") {
+            processResponseNodes(target.parentElement, target.nextSibling, resp, after);
         } else {
-            target.innerHTML = resp;
-            for (var i = 0; i < target.children.length; i++) {
-                const child = target.children[i];
-                processElement(child);
+            target.innerHTML = "";
+            processResponseNodes(target, null, resp, after);
+        }
+    }
+
+    /**
+     * @param {string} elt element 이름 
+     * @param {string} eventName 이벤트 이름
+     * @param {CustomEventInit<any> | undefined} CustomEvent 객체의 detail 인자값
+    */
+    function triggerEvent(elt, eventName, details) {
+        details["elt"] = elt;
+        if (window.CustomEvent && typeof window.CustomEvent === 'function') {
+            var event = new CustomEvent(eventName, {detail: details});
+        } else {
+            var event = document.createEvent('CustomEvent');
+            event.initCustomEvent(eventName, true, true, details);
+        }
+        elt.dispatchEvent(event);
+    }
+
+    /**
+     * @param {string} o [object Object] 인지 검사
+     * @return {boolean} rawObject이면 true, 아니면 false 
+    */
+    function isRawObject(o){
+        return Object.prototype.toString.call(o) === "[object Object]";
+    }
+
+    /**
+     * @param {string} elt element 이름 
+     * @param {string} trigger X-HX-Trigger
+     * @description X-HX-Trigger가 있다면 가져와서 이벤트를 실행
+    */
+    function handleTrigger(elt, trigger) {
+        if (trigger) {
+            if (trigger.indexOf("{") === 0) {
+                var triggers = JSON.parse(trigger);
+                for (var eventName in triggers) {
+                    if (triggers.hasOwnProperty(eventName)) {
+                        var details = triggers[eventName];
+                        if (!isRawObject(details)) {
+                            details = {"value": details}
+                        }
+                        triggerEvent(elt, eventName, details);
+                    }
+                }
+            } else {
+                triggerEvent(elt, trigger, []);
             }
+        }
+    }
+
+
+    function makeHistoryId() {
+        return Math.random().toString(36).substr(3, 9);
+    }
+
+    function getHistoryElement() {
+        var historyElt = document.getElementsByClassName('hx-history-element');
+        if (historyElt.length > 0) {
+            return historyElt[0];
+        } else {
+            return document.body;
+        }
+    }
+
+    function saveLocalHistoryData(historyData) {
+        localStorage.setItem('hx-history', JSON.stringify(historyData));
+    }
+
+    function getLocalHistoryData() {
+        var historyEntry = localStorage.getItem('hx-history');
+        if (historyEntry) {
+            var historyData = JSON.parse(historyEntry);
+        } else {
+            var initialId = makeHistoryId();
+            var historyData = {"current": initialId, "slots": [initialId]};
+            saveLocalHistoryData(historyData);
+        }
+        return historyData;
+    }
+
+    function newHistoryData() {
+        var historyData = getLocalHistoryData();
+        var newId = makeHistoryId();
+        var slots = historyData.slots;
+        if (slots.length > 20) {
+            var toEvict = slots.shift();
+            localStorage.removeItem('hx-history-' + toEvict);
+        }
+        slots.push(newId);
+        historyData.current = newId;
+        saveLocalHistoryData(historyData);
+    }
+
+    function updateCurrentHistoryContent() {
+        var elt = getHistoryElement();
+        var historyData = getLocalHistoryData();
+        history.replaceState({"hx-history-key": historyData.current}, document.title, window.location.href);
+        localStorage.setItem('hx-history-' + historyData.current, elt.innerHTML);
+    }
+
+    function restoreHistory(data) {
+        var historyKey = data['hx-history-key'];
+        var content = localStorage.getItem('hx-history-' + historyKey);
+        var elt = getHistoryElement();
+        elt.innerHTML = "";
+        processResponseNodes(elt, null, content);
+    }
+
+    function snapshotForCurrentHistoryEntry(elt) {
+        if (getClosestAttributeValue(elt, "hx-push-url") === "true") {
+            // TODO event to allow deinitialization of HTML elements in target
+            updateCurrentHistoryContent();
+        }
+    }
+
+    function initNewHistoryEntry(elt, url) {
+        if (getClosestAttributeValue(elt, "hx-push-url") === "true") {
+            newHistoryData();
+            history.pushState({}, "", url);
+            updateCurrentHistoryContent();
         }
     }
 
@@ -106,26 +245,50 @@ var inchTMX = inchTMX || (function(){
      * @description 실제 api 통신을 진행한다.
      */
     function issueAjaxRequest(elt, url) {
-        // XMLHttpRequest 객체는 서버로부터 XML 데이터를 전송받아 처리하는 데 사용됩니다.
-        var request = new XMLHttpRequest();
-        // open() 메소드의 세 번째 인수로 true를 전달함으로써 비동기식으로 요청을 보낸다.
-        request.open('GET', url, true);
-        request.onload = function() {
-            if(this.status >= 200 && this.status < 400) {
-                if (this.status != 204) {
-                    // 통신 Success
-                    var resp = this.response;
-                    swapResponse(elt, resp);
-                }
-            } else {
-                elt.innerHTML = "ERROR";
+        var target = getTarget(elt);
+            if (getClosestAttributeValue(elt, "hx-prompt")) {
+                var prompt = prompt(getClosestAttributeValue(elt, "hx-prompt"));
             }
-        };
-        request.onerror = function () {
-            // There was a connection error of some sort
-        };
-        // 이제 실제로 데이터를 보낸다..!
-        request.send();
+
+            var xhr = new XMLHttpRequest();
+            // TODO - support more request types POST, PUT, DELETE, etc.
+            //         all should use POST and use the X-HTTP-Method-Override header
+            xhr.open('GET', url, true);
+
+            // request headers
+            xhr.setRequestHeader("X-HX-Request", "true");
+            xhr.setRequestHeader("X-HX-Trigger-Id", elt.getAttribute("id") || "");
+            xhr.setRequestHeader("X-HX-Trigger-Name", elt.getAttribute("name") || "");
+            xhr.setRequestHeader("X-HX-Target-Id", target.getAttribute("id") || "");
+            xhr.setRequestHeader("X-HX-Current-URL", document.location.href);
+            if (prompt) {
+                xhr.setRequestHeader("X-HX-Prompt", prompt);
+            }
+
+            xhr.onload = function () {
+                snapshotForCurrentHistoryEntry(elt, url);
+                var trigger = this.getResponseHeader("X-HX-Trigger");
+                handleTrigger(elt, trigger);
+                initNewHistoryEntry(elt, url);
+                if (this.status >= 200 && this.status < 400) {
+                    // don't process 'No Content' response
+                    if (this.status != 204) {
+                        // Success!
+                        var resp = this.response;
+                        swapResponse(target, elt, resp, function(){
+                            updateCurrentHistoryContent();
+                        });
+                    }
+                } else {
+                    // TODO error handling
+                    elt.innerHTML = "ERROR";
+                }
+            };
+            xhr.onerror = function () {
+                // TODO error handling
+                // There was a connection error of some sort
+            };
+            xhr.send();
     }
 
     /**
@@ -165,7 +328,7 @@ var inchTMX = inchTMX || (function(){
      * @param {string} operation 여러 명령어 일단, remove, add만 있다.
      * @description 클래스를 추가한다.
      */ 
-     function processClassList(elt, classList, operation) {
+    function processClassList(elt, classList, operation) {
         var values = classList.split(",");
         for (var i = 0; i < values.length; i++) {
             var cssClass = "";
@@ -219,9 +382,13 @@ var inchTMX = inchTMX || (function(){
         }
     }
 
-    ready(function() {
+    ready(function () {
         processElement(document.body);
-    });
+        window.onpopstate = function (event) {
+            restoreHistory(event.state);
+        };
+    })
+
 
     // Public API
     return {
