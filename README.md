@@ -58,9 +58,19 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 
 ### htmx 초기 세팅(4)
 
-- commit:
+- commit: 897f5134aaaaf6e960060252e540cc703df020e0
 
 1. 드디어 <code>hx-swap-style</code>이 <code>hx-swap</code>으로 변경됐다.
 2. click 이벤트 리스너에 이벤트 버블링이 발생했던 거 같다. <code>e.stopPropagation()</code> 함수가 추가됐다.
 3. 테스트를 할 수 있는 index.html이 추가돼었다.
 4. <code>getAttribute</code> 함수가 추가돼었다. data- 접두어에 대응하기 위해 추가되었다.
+
+### htmx 초기 세팅(5)
+
+- commit: 
+
+1. <code>getAttribute</code>의 이름이 <code>getAttributeValue</code> 함수로 이름이 바뀌었다.
+2. 기존 click 트리거만 지원하는 거에서 change, submit 등등 다양한 트리거를 지원하게끔 기능이 추가되었다.
+3. trigger의 load 기능이 추가되었다. 
+4. 변수 선언 방식이 let에서 var로 변경되었다. -> es6를 지원하지 않는 환경에서만 지원되도록 하기 위함인 것 같다. 
+5. [classes-tool](https://htmx.org/extensions/class-tools/) 이 기능이 추가되었다. hx-add-class라는 속성과 hx-remove-class(나중에 약어로 classes로 변경되는 것 같다.)을 통해서 클래스를 추가하거나 제거할 수 있도록 한다.
