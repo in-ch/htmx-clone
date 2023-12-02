@@ -67,7 +67,7 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 
 ### htmx 초기 세팅(5)
 
-- commit: 
+- commit: 6f86acdc762ecaf5fa4011c4f9523d320f819430
 
 1. <code>getAttribute</code>의 이름이 <code>getAttributeValue</code> 함수로 이름이 바뀌었다.
 2. 기존 click 트리거만 지원하는 거에서 change, submit 등등 다양한 트리거를 지원하게끔 기능이 추가되었다.
@@ -77,8 +77,17 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 
 ### htmx 초기 세팅(6)
 
-- commit: 
+- commit: 499747ef8c36faa1091323c4587eec2dbb55303e
 
 1. header를 지원하기 위한 기능들이 추가되었다. -> 추후에 삭제된다.
 2. history 기능이 추가되었다. -> 추후에 삭제된다.
 3. <code>swapResponse</code>에 중복코드가 많아 <code>processResponseNodes</code>를 추가
+
+### htmx 초기 세팅(7)
+
+- commit: 
+
+1. <code>hx-trigger</code>의 <code>every</code> 기능이 추가되었고 
+   이를 지원하기 위해 <code>processPolling</code> 함수가 추가되었다. 재귀식으로 지속적으로 호출한다.
+2. <code>hx-indicator</code> 기능이 추가되었다.
+3. 다양한 get, post, put 등 등 method 등이 지원하도록 기능이 추가되었다.

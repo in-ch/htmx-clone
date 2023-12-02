@@ -4,6 +4,8 @@
 var inchTMX = inchTMX || (function(){
     'use strict';
 
+    var VERBS = ['get', 'post', 'put', 'delete', 'patch']
+
     function parseInterval(str) {
         if (str === "null" || str === "false" || str === "") {
             return null;
@@ -240,20 +242,61 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
+     * @param {HTMLElement} elt 엘리먼트
+     * @description indicator를 추가한다.
+    */
+    function addRequestIndicatorClasses(elt) {
+        mutateRequestIndicatorClasses(elt, "add");
+    }
+
+    /**
+     * @param {HTMLElement} elt 엘리먼트
+     * @description indicator를 제거한다.
+    */
+    function removeRequestIndicatorClasses(elt) {
+        mutateRequestIndicatorClasses(elt, "remove");
+    }
+
+    /**
+     * @param {HTMLElement} elt 엘리먼트
+     * @param {string} action add, remove 등 액션
+     * @description indicator를 추가하거나 제거한다.
+    */
+    function mutateRequestIndicatorClasses(elt, action) {
+        var indicator = getClosestAttributeValue(elt, 'hx-indicator');
+        if (indicator) {
+            var indicators = document.querySelectorAll(indicator);
+        } else {
+            indicators = [elt];
+        }
+        for (var i = 0; i < indicators.length; i++) {
+            indicators[i].classList[action].call(indicators[i].classList, "hx-show-indicator");
+        }
+    }
+
+    /**
      * @param {string} elt 바인딩할 element 값
-     * @param {string} url api 주소
+     * @param {string} verb get, post, put 등 등 rest api 메소드
+     * @param {string} path api 주소
      * @description 실제 api 통신을 진행한다.
      */
-    function issueAjaxRequest(elt, url) {
+    function issueAjaxRequest(elt, verb, path) {
         var target = getTarget(elt);
             if (getClosestAttributeValue(elt, "hx-prompt")) {
                 var prompt = prompt(getClosestAttributeValue(elt, "hx-prompt"));
             }
 
             var xhr = new XMLHttpRequest();
-            // TODO - support more request types POST, PUT, DELETE, etc.
-            //         all should use POST and use the X-HTTP-Method-Override header
-            xhr.open('GET', url, true);
+            if (verb === 'get') {
+                xhr.open('GET', path, true);
+            } else {
+                xhr.open('POST', path, true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+                if (verb !== 'post') {
+                    xhr.setRequestHeader('X-HTTP-Method-Override', verb.toUpperCase());
+                }
+            }
+            xhr.overrideMimeType("text/html");
 
             // request headers
             xhr.setRequestHeader("X-HX-Request", "true");
@@ -283,11 +326,13 @@ var inchTMX = inchTMX || (function(){
                     // TODO error handling
                     elt.innerHTML = "ERROR";
                 }
+                removeRequestIndicatorClasses(elt);
             };
             xhr.onerror = function () {
-                // TODO error handling
-                // There was a connection error of some sort
+                removeIndicatorClasses(elt);
+                elt.innerHTML = "ERROR";
             };
+            addRequestIndicatorClasses(elt);
             xhr.send();
     }
 
@@ -347,19 +392,50 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
+     * @param {HTMLElement} elt element 요소
+     * @param {string} verb action들, get, post 등등 
+     * @param {string} path api 주소
+     * @description every trigger가 추가되었다. 지속적으로 polling을 실시한다. 
+     */
+    function processPolling(elt, verb, path) {
+        var trigger = getTrigger(elt);
+        if (trigger.trim().indexOf("every ") === 0) {
+            var args = trigger.split(/\s+/);
+            var intervalStr = args[1];
+            if (intervalStr) {
+                var interval = parseInterval(intervalStr);
+                // TODO store for cancelling
+                var timeout = setTimeout(function () {
+                    if (document.body.contains(elt)) {
+                        issueAjaxRequest(elt, verb, path);
+                        processPolling(elt, verb, getAttributeValue(etl, "hx-" + verb));
+                    }
+                }, interval);
+            }
+        }
+    }
+
+    /**
      * @param {string} elt 바인딩된 element
      * @description hx-get 속성을 가진 모든 요소를 재귀 방식으로 싹다 api 호출할 수 있도록  api 호출 함수를 바인딩한다.
      */
     function processElement(elt) {
-        if(elt.getAttributeValue('hx-get')) {
-            var trigger = getTrigger(elt);
-            if (trigger === 'load') {
-                issueAjaxRequest(elt, getAttributeValue(elt, 'hx-get'));
-            } else {
-                elt.addEventListener(trigger, function(evt){
-                    issueAjaxRequest(elt, getAttributeValue(elt, 'hx-get'));
-                    evt.stopPropagation();
-                });
+        for (var i = 0; i < VERBS.length; i++) {
+            var verb = VERBS[i];
+            var path = getAttributeValue(elt, 'hx-' + verb);
+            if (path) {
+                var trigger = getTrigger(elt);
+                if (trigger === 'load') {
+                    issueAjaxRequest(elt, verb, path);
+                } else if (trigger.trim().indexOf('every ') === 0) {
+                    processPolling(elt, action);
+                } else {
+                    elt.addEventListener(trigger, function (evt) {
+                        issueAjaxRequest(elt, verb, path);
+                        evt.stopPropagation();
+                    });
+                }
+                break;
             }
         }
         if (getAttributeValue(elt, 'hx-add-class')) {
@@ -389,10 +465,14 @@ var inchTMX = inchTMX || (function(){
         };
     })
 
-
+    function internalEval(str){
+        return eval(str);
+    }
+    
     // Public API
     return {
         processElement : processElement,
-        version: "0.0.1"
+        version: "0.0.1",
+        _:internalEval
     }
 })();
