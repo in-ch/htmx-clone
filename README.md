@@ -85,9 +85,16 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 
 ### htmx 초기 세팅(7)
 
-- commit: 
+- commit: 830c606fee29e9c900c7561e4cd07d2b532b2d23
 
 1. <code>hx-trigger</code>의 <code>every</code> 기능이 추가되었고 
    이를 지원하기 위해 <code>processPolling</code> 함수가 추가되었다. 재귀식으로 지속적으로 호출한다.
 2. <code>hx-indicator</code> 기능이 추가되었다.
 3. 다양한 get, post, put 등 등 method 등이 지원하도록 기능이 추가되었다.
+
+### htmx 초기 세팅(8)
+
+- commit: 
+
+1. <code>hx-include</code>가 추가됐다. [hx-include 문서](https://htmx.org/attributes/hx-include/)
+2. <code>hx-data-internal</code>가 추가되지만 추후에 삭제되는 듯 하다.

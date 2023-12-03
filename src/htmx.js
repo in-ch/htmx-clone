@@ -6,6 +6,13 @@ var inchTMX = inchTMX || (function(){
 
     var VERBS = ['get', 'post', 'put', 'delete', 'patch']
 
+    /**
+     * 문자열로 표현된 시간 간격 또는 지속 시간을 파싱한다.
+     * @param {string} str 파싱할 입력 문자열
+     * @description 이 함수는 밀리초(ms) 및 초(s)를 포함한 다양한 형식의 시간 간격을 처리
+     *              입력 문자열이 "null," "false," 또는 빈 문자열인 경우 null을 반환
+     * @returns {null | number} 파싱된 시간 간격(밀리초) 또는 입력이 잘못된 경우 null을 반환
+     */
     function parseInterval(str) {
         if (str === "null" || str === "false" || str === "") {
             return null;
@@ -14,7 +21,7 @@ var inchTMX = inchTMX || (function(){
         } else if (str.lastIndexOf("s") === str.length - 1) {
             return parseFloat(str.substr(0, str.length - 1)) * 1000;
         } else {
-            return 1000;
+            return parseFloat(str);
         }
     }
 
@@ -53,6 +60,68 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
+     * @param {string} elt 검사할 element
+     * @param {string} selector 태그 이름
+     * @description 태그가 일치하면 true, 일치하지 않으면 false
+     * @return {boolean} 결과값
+    */
+    function matches(elt, selector) {
+        return (elt != null) &&(elt.matches || elt.matchesSelector || elt.msMatchesSelector || elt.mozMatchesSelector || elt.webkitMatchesSelector || elt.oMatchesSelector).call(elt, selector);
+    }
+
+    /**
+     * @description 가장 가까운 selector를 찾는다.
+    */
+    function closest (elt, selector) {
+        do if (elt == null || matches(elt, selector)) return elt;
+        while (elt = elt && elt.parentElement);
+    }
+
+    /**
+     * @param {string} resp 문자열
+     * @description createRange() 메소드를 통해 Range 객체를 생성한다. 그 후, createContextualFragment 메서드를 통해
+     *              새로운 DOM 노드를 반환한다.
+     * @returns {DocumentFragment | HTMLElement} 반환되는 DOM 노드, DocumentFragment는 일반적으로 동적으로 생성된 컨텐츠나 여러 요소를 일괄적으로 삽입할 때 사용된다. 즉, node의 집합(여러 HTML 요소를 담고 있다.)
+     */
+     function makeFragment(resp) {
+        var range = document.createRange();
+        return range.createContextualFragment(resp);
+    }
+
+    /**
+     * @param {string} o [object Object] 인지 검사
+     * @return {boolean} rawObject이면 true, 아니면 false 
+     */
+     function isRawObject(o){
+        return Object.prototype.toString.call(o) === "[object Object]";
+    }
+
+    /**
+     * @param {HTMLElement} elt 내부 데이터를 관리할 요소
+     * @returns {Object} 요소에 연결된 내부 데이터 객체
+     * @description 주어진 요소(elt)에 대한 내부 데이터를 관리하는 함수
+     *              이 함수는 주어진 요소에 대한 내부 데이터를 가져오거나, 만약 데이터가 없다면 새로 생성하여 연결
+     *              내부 데이터는 요소에 'hx-data-internal'라는 속성으로 저장되며, 해당 속성이 비어있거나 존재하지 않으면 빈 객체가 새로 생성되어 연결
+     */
+    function getInternalData(elt) {
+        var dataProp = 'hx-data-internal';
+        var data = elt[dataProp];
+        if (!data) {
+            data = elt[dataProp] = {};
+        }
+        return data;
+    }
+
+    /**
+     * @description 반복문 utility
+    */
+    function forEach(arr, func) {
+        for (var i = 0; i < arr.length; i++) {
+            func(arr[i]);
+        }
+    }
+
+    /**
      * @param {HTMLElement} elt 엘리먼트
      * @description "hx-target"을 가진 가장 가까운 엘리먼트를 리턴한다.
      * @returns {HTMLElement} 찾은 HTMLElement
@@ -67,17 +136,6 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
-     * @param {string} resp 문자열
-     * @description createRange() 메소드를 통해 Range 객체를 생성한다. 그 후, createContextualFragment 메서드를 통해
-     *              새로운 DOM 노드를 반환한다.
-     * @returns {DocumentFragment | HTMLElement} 반환되는 DOM 노드, DocumentFragment는 일반적으로 동적으로 생성된 컨텐츠나 여러 요소를 일괄적으로 삽입할 때 사용된다. 즉, node의 집합(여러 HTML 요소를 담고 있다.)
-     */
-    function makeFragment(resp) {
-        var range = document.createRange();
-        return range.createContextualFragment(resp);
-    }
-
-    /**
      * @param {HTMLElement} parent 부모 엘리먼트
      * @param {string} text api 리스폰스 값 
      * @param {string} target hx-target의 타겟 엘리먼트 
@@ -88,6 +146,7 @@ var inchTMX = inchTMX || (function(){
         for (var i = fragment.childNodes.length - 1; i >= 0; i--) {
             var child = fragment.childNodes[i];
             parent.insertBefore(child, target);
+            triggerEvent(target || parent, 'load.hx', {parent:parent, target:target, node:child});
             if (child.nodeType != Node.TEXT_NODE) {
                 processElement(child);
             }
@@ -133,15 +192,7 @@ var inchTMX = inchTMX || (function(){
             var event = document.createEvent('CustomEvent');
             event.initCustomEvent(eventName, true, true, details);
         }
-        elt.dispatchEvent(event);
-    }
-
-    /**
-     * @param {string} o [object Object] 인지 검사
-     * @return {boolean} rawObject이면 true, 아니면 false 
-    */
-    function isRawObject(o){
-        return Object.prototype.toString.call(o) === "[object Object]";
+        return elt.dispatchEvent(event);
     }
 
     /**
@@ -166,6 +217,126 @@ var inchTMX = inchTMX || (function(){
                 triggerEvent(elt, trigger, []);
             }
         }
+    }
+
+    /**
+     * @param {string} elt 트리거를 발생시킬 element
+     * @description 트리거를 click만에서 click, submit, change 등등 트리거들을 추가한다.
+     */
+    function getTrigger(elt) {
+        var explicitTrigger = getClosestAttributeValue(elt, 'hx-trigger');
+        if (explicitTrigger) {
+            return explicitTrigger;
+        } else {
+            if (matches(elt, 'button')) {
+                return 'click';
+            } else if (matches(elt, 'form')) {
+                return 'submit';
+            } else if (matches(elt, 'input, textarea, select')) {
+                return 'change';
+            } else {
+                return 'click';
+            }
+        }
+    }
+
+    /**
+     * @param {string} classInfo
+     * @param {string} element 정보
+     * @param {string} operation 여러 명령어 일단, remove, add만 있다.
+     * @description 클래스를 추가한다.
+     */ 
+    function processClassList(elt, classList, operation) {
+        var values = classList.split(",");
+        forEach(values, function(value){
+            var cssClass = "";
+            var delay = 50;
+            var trimmedValue = value.trim();
+            if (trimmedValue.indexOf(":") > 0) {
+                var split = trimmedValue.split(':');
+                cssClass = split[0];
+                delay = parseInterval(split[1]);
+            } else {
+                cssClass = trimmedValue;
+            }
+            setTimeout(function () {
+                elt.classList[operation].call(elt.classList, cssClass);
+            }, delay);
+        });
+    }
+
+    /**
+     * @param {HTMLElement} elt element 요소
+     * @param {string} verb action들, get, post 등등 
+     * @param {string} path api 주소
+     * @description every trigger가 추가되었다. 지속적으로 polling을 실시한다. 
+     */
+    function processPolling(elt, verb, path) {
+        var trigger = getTrigger(elt);
+        var nodeData = getInternalData(elt);
+        if (trigger.trim().indexOf("every ") === 0) {
+            var args = trigger.split(/\s+/);
+            var intervalStr = args[1];
+            if (intervalStr) {
+                var interval = parseInterval(intervalStr);
+                // TODO store for cancelling
+                var timeout = setTimeout(function () {
+                    if (document.body.contains(elt)) {
+                        issueAjaxRequest(elt, verb, path);
+                        processPolling(elt, verb, getAttributeValue(etl, "hx-" + verb));
+                    }
+                }, interval);
+                nodeData.timeout = timeout;
+            }
+        }
+    }
+
+    /**
+     * @param {string} elt 바인딩된 element
+     * @description hx-get 속성을 가진 모든 요소를 재귀 방식으로 싹다 api 호출할 수 있도록  api 호출 함수를 바인딩한다.
+     */
+    function processElement(elt) {
+        var nodeData = getInternalData(elt);
+        if (nodeData.processed) {
+            return;
+        } else {
+            nodeData.processed = true;
+        }
+
+        forEach(VERBS, function(verb){
+            var path = getAttributeValue(elt, 'hx-' + verb);
+            if (path) {
+                var trigger = getTrigger(elt);
+                if (trigger === 'load') {
+                    if (!nodeData.loaded) {
+                        nodeData.loaded = true;
+                        issueAjaxRequest(elt, verb, path);
+                    }
+                } else if (trigger.trim().indexOf('every ') === 0) {
+                    nodeData.polling = true;
+                    processPolling(elt, action, path);
+                } else {
+                    var eventListener = function (evt) {
+                        var eventData = getInternalData(evt);
+                        if (!eventData.handled) {
+                            eventData.handled = true;
+                            issueAjaxRequest(elt, verb, path, evt.target);
+                        }
+                    };
+                    nodeData.trigger = trigger;
+                    nodeData.eventListener = eventListener;
+                    elt.addEventListener(trigger, eventListener);
+                }
+                return;
+            }
+        });
+        if (getAttributeValue(elt, 'hx-add-class')) {
+            processClassList(elt, getAttributeValue(elt, 'hx-add-class'), "add");
+        }
+        if (getAttributeValue(elt, 'hx-remove-class')) {
+            processClassList(elt, getAttributeValue(elt, 'hx-remove-class'), "remove");
+        }
+        forEach(elt.children, function(child) { processElement(child) });
     }
 
 
@@ -269,9 +440,137 @@ var inchTMX = inchTMX || (function(){
         } else {
             indicators = [elt];
         }
-        for (var i = 0; i < indicators.length; i++) {
-            indicators[i].classList[action].call(indicators[i].classList, "hx-show-indicator");
+        forEach(indicators, function(ic) {
+            ic.classList[action].call(ic.classList, "hx-show-indicator");
+        });
+    }
+
+    /**
+     * 주어진 요소(elt)가 이미 처리된 노드 목록(processed)에 있는지 확인
+     * @param {Array<HTMLElement>} processed 처리된 요소 목록
+     * @param {HTMLElement} elt 확인할 요소
+     * @returns {boolean} 이미 처리된 경우 true, 그렇지 않은 경우 false를 반환
+     */
+    function haveSeenNode(processed, elt) {
+        for (var i = 0; i < processed.length; i++) {
+            var node = processed[i];
+            if (node.isSameNode(elt)) {
+                return true;
+            }
         }
+        return false;
+    }
+
+    /**
+     * @param {Array<HTMLElement>} processed 처리된 요소 목록
+     * @param {Object} values 값 목록
+     * @param {HTMLElement} elt 처리할 요소
+     * @description 입력 값을 처리하고 처리된 노드와 값을 추적
+     */
+    function processInputValue(processed, values, elt) {
+        if (elt == null || haveSeenNode(processed, elt)) {
+            return;
+        } else {
+            processed.push(elt);
+        }
+        var name = elt.getAttribute("name");
+        var value = elt.value;
+        if (name && value) {
+            var current = values[name];
+            if(current) {
+                if (Array.isArray(current)) {
+                    current.push(value);
+                } else {
+                    values[name] = [current, value];
+                }
+            } else {
+                values[name] = value;
+            }
+        }
+        if (matches(elt, 'form')) {
+            var inputs = elt.elements;
+            for (var i = 0; i < inputs.length; i++) {
+                processInputValue(processed, values, inputs[i]);
+            }
+        }
+    }
+
+    /**
+     * @param {HTMLElement} elt 입력 값을 수집할 요소
+     * @returns {Object | null} 수집된 입력 값 목록 또는 null (값이 없는 경우)
+     * @description 주어진 요소(elt)와 관련된 입력 값을 수집
+     */
+    function getInputValues(elt) {
+        var processed = [];
+        var values = {};
+
+        processInputValue(processed, values, elt);
+
+        var includes = getAttributeValue(elt, "hx-include");
+        if (includes) {
+            var nodes = document.querySelectorAll(includes);
+            for (var i = 0; i < nodes.length; i++) {
+                var node = nodes[i];
+                processInputValue(processed, values, node);
+            }
+        }
+
+        processInputValue(processed, values, closest(elt, 'form'));
+        return Object.keys(values).length == 0 ? null : values;
+    }
+
+    /**
+     * @param {string} returnStr 현재까지의 URL 쿼리 문자열
+     * @param {string} name 추가할 키
+     * @param {string} realValue 추가할 값
+     * @returns {string} 업데이트된 URL 쿼리 문자열
+     * @description URL 쿼리 문자열에 키-값 쌍을 추가하는 유틸
+     *              이 함수는 주어진 URL 쿼리 문자열에 새로운 키-값 쌍을 추가
+     *              이미 문자열이 비어있지 않다면 '&'로 구분하여 기존 문자열에 새로운 쿼리를 연결하고,
+     *              키와 값은 encodeURIComponent를 통해 인코딩되어 추가된다.
+     */
+    function appendParam(returnStr, name, realValue) {
+        if (returnStr !== "") {
+            returnStr += "&";
+        }
+        returnStr += encodeURIComponent(name) + "=" + encodeURIComponent(realValue);
+        return returnStr;
+    }
+
+    /**
+     * @param {Object} values 인코딩할 값들이 담긴 객체
+     * @returns {string} URL 쿼리 문자열
+     * @description 주어진 객체(values)를 URL 쿼리 문자열로 인코딩
+     */
+    function urlEncode(values) {
+        var returnStr = "";
+        for (var name in values) {
+            if (values.hasOwnProperty(name)) {
+                var value = values[name];
+                if (Array.isArray(value)) {
+                    for (var i = 0; i < value.length; i++) {
+                        returnStr = appendParam(returnStr, name, value[i]);
+                    }
+                } else {
+                    returnStr = appendParam(returnStr, name, value);
+                }
+            }
+        }
+        return returnStr;
+    }
+
+    /**
+     * @param {XMLHttpRequest} xhr 헤더를 설정할 XMLHttpRequest 객체
+     * @param {string} name 설정할 헤더의 이름
+     * @param {string} value 설정할 헤더의 값
+     * @param {boolean} noPrefix 헤더에 "X-HX-" 접두사를 추가할지 여부 (기본값: false)
+     * @description XMLHttpRequest 객체의 헤더를 설정하는 함수
+     *              XMLHttpRequest 객체의 헤더를 설정
+     *              헤더 이름에 "X-HX-" 접두사를 추가하려면 `noPrefix` 매개변수를 false로 설정하면 된다.
+     *              설정된 값이 없을 경우, 빈 문자열이 기본값으로 사용
+    */
+    function setHeader(xhr, name, value, noPrefix) {
+        xhr.setRequestHeader((noPrefix ? "" : "X-HX-") + name, value || "");
     }
 
     /**
@@ -281,173 +580,99 @@ var inchTMX = inchTMX || (function(){
      * @description 실제 api 통신을 진행한다.
      */
     function issueAjaxRequest(elt, verb, path) {
-        var target = getTarget(elt);
-            if (getClosestAttributeValue(elt, "hx-prompt")) {
-                var prompt = prompt(getClosestAttributeValue(elt, "hx-prompt"));
+        var eltData = getInternalData(elt);
+            if (eltData.requestInFlight) {
+                return;
+            } else {
+                eltData.requestInFlight = true;
+            }
+            var endRequestLock = function(){
+                eltData.requestInFlight = false
+            }
+            var target = getTarget(elt);
+            var promptQuestion = getClosestAttributeValue(elt, "hx-prompt");
+            if (promptQuestion) {
+                var prompt = prompt(promptQuestion);
+                if(!triggerEvent(elt, 'prompt.hx', {prompt: prompt, target:target})) return endRequestLock();
+            }
+
+            var confirmQuestion = getClosestAttributeValue(elt, "hx-confirm");
+            if (confirmQuestion) {
+                if(!confirm(confirmQuestion)) return endRequestLock();
             }
 
             var xhr = new XMLHttpRequest();
+
+            var inputVals = getInputValues(elt);
+            if(!triggerEvent(elt, 'values.hx', {values: inputVals, target:target})) return endRequestLock();
+
             if (verb === 'get') {
-                xhr.open('GET', path, true);
+                xhr.open('GET', path + (inputVals ? "?" + urlEncode(inputVals) : ""), true);
             } else {
                 xhr.open('POST', path, true);
-                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+                setHeader(xhr,'Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8', true);
                 if (verb !== 'post') {
-                    xhr.setRequestHeader('X-HTTP-Method-Override', verb.toUpperCase());
+                    setHeader(xhr, 'X-HTTP-Method-Override', verb.toUpperCase(), true);
                 }
             }
+
             xhr.overrideMimeType("text/html");
 
-            // request headers
-            xhr.setRequestHeader("X-HX-Request", "true");
-            xhr.setRequestHeader("X-HX-Trigger-Id", elt.getAttribute("id") || "");
-            xhr.setRequestHeader("X-HX-Trigger-Name", elt.getAttribute("name") || "");
-            xhr.setRequestHeader("X-HX-Target-Id", target.getAttribute("id") || "");
-            xhr.setRequestHeader("X-HX-Current-URL", document.location.href);
+            setHeader(xhr, "Request", "true");
+            setHeader(xhr,"Trigger-Id", elt.getAttribute("id"));
+            setHeader(xhr,"Trigger-Name", elt.getAttribute("name"));
+            setHeader(xhr,"Target-Id", target.getAttribute("id"));
+            setHeader(xhr,"Current-URL", document.location.href);
             if (prompt) {
-                xhr.setRequestHeader("X-HX-Prompt", prompt);
+                setHeader(xhr,"Prompt", prompt);
+            }
+            if (eventTarget) {
+                setHeader(xhr,"Event-Target", eventTarget.getAttribute("id"));
+            }
+            if (document.activeElement) {
+                setHeader(xhr,"Active-Element", document.activeElement.getAttribute("id"));
+                if (document.activeElement.value) {
+                    setHeader(xhr,"Active-Element-Value", document.activeElement.value);
+                }
             }
 
             xhr.onload = function () {
-                snapshotForCurrentHistoryEntry(elt, url);
-                var trigger = this.getResponseHeader("X-HX-Trigger");
-                handleTrigger(elt, trigger);
-                initNewHistoryEntry(elt, url);
-                if (this.status >= 200 && this.status < 400) {
-                    // don't process 'No Content' response
-                    if (this.status != 204) {
-                        // Success!
-                        var resp = this.response;
-                        swapResponse(target, elt, resp, function(){
-                            updateCurrentHistoryContent();
-                        });
+                try {
+                    if(!triggerEvent(elt, 'beforeOnLoad.hx', {xhr:xhr, target:target})) return;
+                    snapshotForCurrentHistoryEntry(elt, path);
+                    var trigger = this.getResponseHeader("X-HX-Trigger");
+                    handleTrigger(elt, trigger);
+                    initNewHistoryEntry(elt, path);
+                    if (this.status >= 200 && this.status < 400) {
+                        // don't process 'No Content' response
+                        if (this.status != 204) {
+                            // Success!
+                            var resp = this.response;
+                            if(!triggerEvent(elt, 'beforeSwap.hx', {xhr:xhr, target:target})) return;
+                            swapResponse(target, elt, resp, function(){
+                                updateCurrentHistoryContent();
+                                triggerEvent(elt, 'afterSwap.hx', {xhr:xhr, target:target});
+                            });
+                        }
+                    } else {
+                        triggerEvent(elt, 'errorResponse.hx', {xhr:xhr, response: xhr.response, status: xhr.status, target:target});
                     }
-                } else {
-                    // TODO error handling
-                    elt.innerHTML = "ERROR";
+                } finally {
+                    removeRequestIndicatorClasses(elt);
+                    triggerEvent(elt, 'afterOnLoad.hx', {xhr:xhr, response: xhr.response, status: xhr.status, target:target});
+                    endRequestLock();
                 }
-                removeRequestIndicatorClasses(elt);
             };
+
             xhr.onerror = function () {
-                removeIndicatorClasses(elt);
-                elt.innerHTML = "ERROR";
+                removeRequestIndicatorClasses(elt);
+                triggerEvent(elt, 'onError.hx', {xhr:xhr});
+                endRequestLock();
             };
+
+            if(!triggerEvent(elt, 'beforeRequest.hx', {xhr:xhr, values: inputVals, target:target})) return endRequestLock();
             addRequestIndicatorClasses(elt);
-            xhr.send();
-    }
-
-    /**
-     * @param {string} elt 검사할 element
-     * @param {string} selector 태그 이름
-     * @description 태그가 일치하면 true, 일치하지 않으면 false
-     * @return {boolean} 결과값
-    */
-    function matches(el, selector) {
-        return (el.matches || el.matchesSelector || el.msMatchesSelector || el.mozMatchesSelector || el.webkitMatchesSelector || el.oMatchesSelector).call(el, selector);
-    }
-
-    /**
-     * @param {string} elt 트리거를 발생시킬 element
-     * @description 트리거를 click만에서 click, submit, change 등등 트리거들을 추가한다.
-     */
-    function getTrigger(elt) {
-        var explicitTrigger = getClosestAttributeValue(elt, 'hx-trigger');
-        if (explicitTrigger) {
-            return explicitTrigger;
-        } else {
-            if (matches(elt, 'button')) {
-                return 'click';
-            } else if (matches(elt, 'form')) {
-                return 'submit';
-            } else if (matches(elt, 'input, textarea, select')) {
-                return 'change';
-            } else {
-                return 'click';
-            }
-        }
-    }
-
-    /**
-     * @param {string} classInfo
-     * @param {string} element 정보
-     * @param {string} operation 여러 명령어 일단, remove, add만 있다.
-     * @description 클래스를 추가한다.
-     */ 
-    function processClassList(elt, classList, operation) {
-        var values = classList.split(",");
-        for (var i = 0; i < values.length; i++) {
-            var cssClass = "";
-            var delay = 50;
-            if (values[i].trim().indexOf(":") > 0) {
-                var split = values[i].trim().split(':');
-                cssClass = split[0];
-                delay = parseInterval(split[1]);
-            } else {
-                cssClass = values[i].trim();
-            }
-            setTimeout(function () {
-                elt.classList[operation].call(elt.classList, cssClass);
-            }, delay);
-        }
-    }
-
-    /**
-     * @param {HTMLElement} elt element 요소
-     * @param {string} verb action들, get, post 등등 
-     * @param {string} path api 주소
-     * @description every trigger가 추가되었다. 지속적으로 polling을 실시한다. 
-     */
-    function processPolling(elt, verb, path) {
-        var trigger = getTrigger(elt);
-        if (trigger.trim().indexOf("every ") === 0) {
-            var args = trigger.split(/\s+/);
-            var intervalStr = args[1];
-            if (intervalStr) {
-                var interval = parseInterval(intervalStr);
-                // TODO store for cancelling
-                var timeout = setTimeout(function () {
-                    if (document.body.contains(elt)) {
-                        issueAjaxRequest(elt, verb, path);
-                        processPolling(elt, verb, getAttributeValue(etl, "hx-" + verb));
-                    }
-                }, interval);
-            }
-        }
-    }
-
-    /**
-     * @param {string} elt 바인딩된 element
-     * @description hx-get 속성을 가진 모든 요소를 재귀 방식으로 싹다 api 호출할 수 있도록  api 호출 함수를 바인딩한다.
-     */
-    function processElement(elt) {
-        for (var i = 0; i < VERBS.length; i++) {
-            var verb = VERBS[i];
-            var path = getAttributeValue(elt, 'hx-' + verb);
-            if (path) {
-                var trigger = getTrigger(elt);
-                if (trigger === 'load') {
-                    issueAjaxRequest(elt, verb, path);
-                } else if (trigger.trim().indexOf('every ') === 0) {
-                    processPolling(elt, action);
-                } else {
-                    elt.addEventListener(trigger, function (evt) {
-                        issueAjaxRequest(elt, verb, path);
-                        evt.stopPropagation();
-                    });
-                }
-                break;
-            }
-        }
-        if (getAttributeValue(elt, 'hx-add-class')) {
-            processClassList(elt, getAttributeValue(elt,'hx-add-class'), "add");
-        }
-        if (getAttributeValue(elt, 'hx-remove-class')) {
-            processClassList(elt, getAttributeValue(elt,'hx-remove-class'), "remove");
-        }
-        for (var i = 0; i < elt.children.length; i++) {
-            const child = elt.children[i];
-            processElement(child);
-        }
+            xhr.send(verb === 'get' ? null : urlEncode(inputVals));
     }
 
     function ready(fn) {
