@@ -32,7 +32,7 @@ var inchTMX = inchTMX || (function(){
      * @returns {null | string} 속성값
      */
     function getAttributeValue(elt, qualifiedName) {
-        return elt.getAttribute(qualifiedName) || elt.getAttribute("data-" + qualifiedName);
+        return elt.getAttribute && (elt.getAttribute(qualifiedName) || elt.getAttribute("data-" + qualifiedName));
     }
 
     /**
@@ -113,6 +113,17 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
+     * @description object를 array로 만든다.
+    */
+    function toArray(object) {
+        var arr = [];
+        for (var i = 0; i < object.length; i++) {
+            arr.push(object[i])
+        }
+        return arr;
+    }
+
+    /**
      * @description 반복문 utility
     */
     function forEach(arr, func) {
@@ -136,21 +147,112 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
+     * @param {HTMLElement} child 자식 엘리먼트
+     * @description "ic-swap-direct"을 가졌다면 바로 swap을 해버린다.
+     * @returns {boolean}
+     */
+    function directSwap(child) {
+        if (getAttributeValue(child, 'ic-swap-direct')) {
+            var target = document.getElementById(child.getAttribute('id'));
+            if (target) {
+                var newParent = target.parentElement;
+                newParent.insertBefore(child, target);
+                newParent.removeChild(target);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * @param {HTMLElement} parent 부모 엘리먼트
      * @param {string} text api 리스폰스 값 
      * @param {string} target hx-target의 타겟 엘리먼트 
      * @description node를 생성한다.
     */
-    function processResponseNodes(parent, target, text) {
+     function processResponseNodes(parentNode, insertBefore, text, executeAfter) {
         var fragment = makeFragment(text);
-        for (var i = fragment.childNodes.length - 1; i >= 0; i--) {
-            var child = fragment.childNodes[i];
-            parent.insertBefore(child, target);
-            triggerEvent(target || parent, 'load.hx', {parent:parent, target:target, node:child});
-            if (child.nodeType != Node.TEXT_NODE) {
+        forEach(toArray(fragment.childNodes), function(child){
+            if (!directSwap(child)) {
+                parentNode.insertBefore(child, insertBefore);
+            }
+            if (child.nodeType !== Node.TEXT_NODE) {
+                triggerEvent(child, 'load.hx', {parent:child.parentElement});
                 processElement(child);
             }
+        })
+        if(executeAfter) {
+            executeAfter.call();
         }
+    }
+
+    /**
+     * @param {HTMLElement} elt 엘리먼트
+     * @param {HTMLElement[]} possible match가 가능한 엘리먼트 배열
+     * @return {HTMLElement[] | null} 
+    */
+    function findMatch(elt, possible) {
+        for (var i = 0; i < possible.length; i++) {
+            var candidate = possible[i];
+            if (elt.hasAttribute("id") && elt.id === candidate.id) {
+                return candidate;
+            }
+            if (!candidate.hasAttribute("id") && elt.tagName === candidate.tagName) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @param {HTMLElement} mergeTo 엘리먼트
+     * @param {HTMLElement} mergeFrom 엘리먼트
+     * @return {HTMLElement} 
+    */
+    function cloneAttributes(mergeTo, mergeFrom) {
+        forEach(mergeTo.attributes, function (attr) {
+            if (!mergeFrom.hasAttribute(attr.name)) {
+                mergeTo.removeAttribute(attr.name)
+            }
+        });
+        forEach(mergeFrom.attributes, function (attr) {
+            mergeTo.setAttribute(attr.name, attr.value);
+        });
+    }
+
+    function mergeChildren(mergeTo, mergeFrom) {
+        var oldChildren = toArray(mergeTo.children);
+        var marker = document.createElement("span");
+        mergeTo.insertBefore(marker, mergeTo.firstChild);
+        forEach(mergeFrom.childNodes, function (newChild) {
+            var match = findMatch(newChild, oldChildren);
+            if (match) {
+                while (marker.nextSibling && marker.nextSibling !== match) {
+                    mergeTo.removeChild(marker.nextSibling);
+                }
+                mergeTo.insertBefore(marker, match.nextSibling);
+                mergeInto(match, newChild);
+            } else {
+                mergeTo.insertBefore(newChild, marker);
+            }
+        });
+        while (marker.nextSibling) {
+            mergeTo.removeChild(marker.nextSibling);
+        }
+        mergeTo.removeChild(marker);
+    }
+
+    function mergeInto(mergeTo, mergeFrom) {
+        cloneAttributes(mergeTo, mergeFrom);
+        mergeChildren(mergeTo, mergeFrom);
+    }
+
+    /**
+     * @description 실제 merge를 실시한다.
+    */
+    function mergeResponse(target, resp) {
+        var fragment = makeFragment(resp);
+        mergeInto(target, fragment.firstElementChild);
     }
 
     /**
@@ -162,7 +264,9 @@ var inchTMX = inchTMX || (function(){
      */
     function swapResponse(target, elt, resp, after) {
         var swapStyle = getClosestAttributeValue(elt, "hx-swap");
-        if (swapStyle === "outerHTML") {
+        if (swapStyle === "merge") {
+            mergeResponse(target, resp);
+        } else if (swapStyle === "outerHTML") {
             processResponseNodes(target.parentElement, target, resp, after);
             target.parentElement.removeChild(target);
         } else if (swapStyle === "prepend") {

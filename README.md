@@ -94,7 +94,14 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 
 ### htmx 초기 세팅(8)
 
-- commit: 
+- commit: 578e8aaf3ab4eec927ba9ee872aa18a5e528f58a
 
 1. <code>hx-include</code>가 추가됐다. [hx-include 문서](https://htmx.org/attributes/hx-include/)
 2. <code>hx-data-internal</code>가 추가되지만 추후에 삭제되는 듯 하다.
+
+### htmx 초기 세팅(9) - ic-swap-direct, swap style merge 추가
+
+- commit: 
+
+1. <code>ic-swap-direct</code>가 추가되었다. 원래 swap을 할 때 <code>processElement</code>를 거치게 되는데 이 옵션이 있다면 바로 swap을 해버린다.
+2. <code>swap</code> 스타일에 <code>merge</code>가 추가되었다.
