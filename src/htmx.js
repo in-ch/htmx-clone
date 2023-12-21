@@ -26,13 +26,52 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
+     * @param {string} elt 엘리먼트
+     * @param {string} name 속성 이름
+     * @description attribute를 찾는다.
+    */
+    function getRawAttribute(elt, name) {
+        return elt.getAttribute && elt.getAttribute(name);
+    }
+
+    /**
      * @param {HTMLElement} elt element
      * @param {string} qualifiedName 찾으려는 속성명, 예를 들어 <div id="test" />라고 했을 때 qualifiedName는 id가 되고 속성값은 test가 되겠다.
      * @description data- 접두어를 쓰려고 추가한 메소드인 것 같다.
      * @returns {null | string} 속성값
      */
-    function getAttributeValue(elt, qualifiedName) {
-        return elt.getAttribute && (elt.getAttribute(qualifiedName) || elt.getAttribute("data-" + qualifiedName));
+     function getAttributeValue(elt, qualifiedName) {
+        return getRawAttribute(elt, qualifiedName) || getRawAttribute(elt, "data-" + qualifiedName);
+    }
+
+    /**
+     * @param {HTMLElement} elt element
+     * @return {HTMLElement} 해당 elt의 부모 element를 반환한다.
+    */
+    function parentElt(elt) {
+        return elt.parentElement;
+    }
+
+    /**
+     * @return {Document} document 객체를 리턴한다. 
+    */
+    function getDocument() {
+        return document;
+    }
+
+    /**
+     * @param {HTMLElement} elt element
+     * @param {Function} attributeName 찾으려는 속성명
+     * @description 가장 가까운 element를 찾는다.
+    */
+    function getClosestMatch(elt, condition) {
+        if (condition(elt)) {
+            return elt;
+        } else if (parentElt(elt)) {
+            return getClosestMatch(parentElt(elt), condition);
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -42,21 +81,12 @@ var inchTMX = inchTMX || (function(){
      *              재귀 형식으로 자식 엘리먼트까지 탐색을 진행한다.
      * @returns {null | string} 속성값
      */
-    function getClosestAttributeValue(elt, attributeName)
-    {
-        var attribute = getAttributeValue(elt, attributeName);
-        if(attribute)
-        {
-            return attribute;
-        }
-        else if (elt.parentElement)
-        {
-            return getClosestAttributeValue(elt.parentElement, attributeName);
-        }
-        else
-        {
-            return null;
-        }
+    function getClosestAttributeValue(elt, attributeName) {
+        var closestAttr = null;
+        getClosestMatch(elt, function (e) {
+            return closestAttr = getRawAttribute(e, attributeName);
+        });
+        return closestAttr;
     }
 
     /**
@@ -66,7 +96,8 @@ var inchTMX = inchTMX || (function(){
      * @return {boolean} 결과값
     */
     function matches(elt, selector) {
-        return (elt != null) &&(elt.matches || elt.matchesSelector || elt.msMatchesSelector || elt.mozMatchesSelector || elt.webkitMatchesSelector || elt.oMatchesSelector).call(elt, selector);
+        return (elt != null) &&(elt.matches || elt.matchesSelector || elt.msMatchesSelector || elt.mozMatchesSelector
+            || elt.webkitMatchesSelector || elt.oMatchesSelector).call(elt, selector);
     }
 
     /**
@@ -74,7 +105,7 @@ var inchTMX = inchTMX || (function(){
     */
     function closest (elt, selector) {
         do if (elt == null || matches(elt, selector)) return elt;
-        while (elt = elt && elt.parentElement);
+        while (elt = elt && parentElt(elt));
     }
 
     /**
@@ -83,8 +114,8 @@ var inchTMX = inchTMX || (function(){
      *              새로운 DOM 노드를 반환한다.
      * @returns {DocumentFragment | HTMLElement} 반환되는 DOM 노드, DocumentFragment는 일반적으로 동적으로 생성된 컨텐츠나 여러 요소를 일괄적으로 삽입할 때 사용된다. 즉, node의 집합(여러 HTML 요소를 담고 있다.)
      */
-     function makeFragment(resp) {
-        var range = document.createRange();
+    function makeFragment(resp) {
+        var range = getDocument().createRange();
         return range.createContextualFragment(resp);
     }
 
@@ -117,9 +148,9 @@ var inchTMX = inchTMX || (function(){
     */
     function toArray(object) {
         var arr = [];
-        for (var i = 0; i < object.length; i++) {
-            arr.push(object[i])
-        }
+        forEach(object, function(elt) {
+            arr.push(elt)
+        });
         return arr;
     }
 
@@ -138,11 +169,22 @@ var inchTMX = inchTMX || (function(){
      * @returns {HTMLElement} 찾은 HTMLElement
      */
     function getTarget(elt) {
-        var targetVal = getClosestAttributeValue(elt, "hx-target");
-        if (targetVal) {
-            return document.querySelector(targetVal);
+        var explicitTarget = getClosestMatch(elt, function(e){return getRawAttribute(e,"hx-target") !== null});
+
+        if (explicitTarget) {
+            var targetStr = getRawAttribute(explicitTarget, "hx-target");
+            if (targetStr === "this") {
+                return explicitTarget;
+            } else {
+                return getDocument().querySelector(targetStr);
+            }
         } else {
-            return elt;
+            var data = getInternalData(elt);
+            if (data.boosted) {
+                return getDocument().body;
+            } else {
+                return elt;
+            }
         }
     }
 
@@ -152,13 +194,18 @@ var inchTMX = inchTMX || (function(){
      * @returns {boolean}
      */
     function directSwap(child) {
-        if (getAttributeValue(child, 'ic-swap-direct')) {
-            var target = document.getElementById(child.getAttribute('id'));
+        var swapDirect = getAttributeValue(child, 'hx-swap-direct');
+        if (swapDirect) {
+            var target = getDocument().getElementById(getRawAttribute(child,'id'));
             if (target) {
-                var newParent = target.parentElement;
-                newParent.insertBefore(child, target);
-                newParent.removeChild(target);
-                return true;
+                if (swapDirect === "merge") {
+                    mergeInto(target, child);
+                } else {
+                    var newParent = parentElt(target);
+                    newParent.insertBefore(child, target);
+                    newParent.removeChild(target);
+                    return true;
+                }
             }
         }
         return false;
@@ -170,17 +217,23 @@ var inchTMX = inchTMX || (function(){
      * @param {string} target hx-target의 타겟 엘리먼트 
      * @description node를 생성한다.
     */
-     function processResponseNodes(parentNode, insertBefore, text, executeAfter) {
+    function processResponseNodes(parentNode, insertBefore, text, executeAfter, selector) {
         var fragment = makeFragment(text);
-        forEach(toArray(fragment.childNodes), function(child){
+        var nodesToProcess;
+        if (selector) {
+            nodesToProcess = toArray(fragment.querySelectorAll(selector));
+        } else {
+            nodesToProcess = toArray(fragment.childNodes);
+        }
+        forEach(nodesToProcess, function(child){
             if (!directSwap(child)) {
                 parentNode.insertBefore(child, insertBefore);
             }
             if (child.nodeType !== Node.TEXT_NODE) {
-                triggerEvent(child, 'load.hx', {parent:child.parentElement});
-                processElement(child);
+                triggerEvent(child, 'load.hx', {parent:parentElt(child)});
+                processNode(child);
             }
-        })
+        });
         if(executeAfter) {
             executeAfter.call();
         }
@@ -220,9 +273,14 @@ var inchTMX = inchTMX || (function(){
         });
     }
 
+    /**
+     * @param {HTMLElement} mergeTo - 병합될 대상 요소
+     * @param {HTMLElement} mergeFrom - 병합할 요소
+     * @description 주어진 요소의 자식 요소를 병합
+     */
     function mergeChildren(mergeTo, mergeFrom) {
         var oldChildren = toArray(mergeTo.children);
-        var marker = document.createElement("span");
+        var marker = getDocument().createElement("span");
         mergeTo.insertBefore(marker, mergeTo.firstChild);
         forEach(mergeFrom.childNodes, function (newChild) {
             var match = findMatch(newChild, oldChildren);
@@ -242,6 +300,11 @@ var inchTMX = inchTMX || (function(){
         mergeTo.removeChild(marker);
     }
 
+    /**
+     * @param {HTMLElement} mergeTo - 병합될 대상 요소
+     * @param {HTMLElement} mergeFrom - 병합할 요소
+     * @description 주어진 요소의 속성과 자식 요소를 병합한다.
+     */
     function mergeInto(mergeTo, mergeFrom) {
         cloneAttributes(mergeTo, mergeFrom);
         mergeChildren(mergeTo, mergeFrom);
@@ -250,9 +313,9 @@ var inchTMX = inchTMX || (function(){
     /**
      * @description 실제 merge를 실시한다.
     */
-    function mergeResponse(target, resp) {
+    function mergeResponse(target, resp, selector) {
         var fragment = makeFragment(resp);
-        mergeInto(target, fragment.firstElementChild);
+        mergeInto(target, selector ? fragment.querySelector(selector) : fragment.firstElementChild);
     }
 
     /**
@@ -264,22 +327,23 @@ var inchTMX = inchTMX || (function(){
      */
     function swapResponse(target, elt, resp, after) {
         var swapStyle = getClosestAttributeValue(elt, "hx-swap");
+        var selector = getClosestAttributeValue(elt, "hx-select");
         if (swapStyle === "merge") {
-            mergeResponse(target, resp);
+            mergeResponse(target, resp, selector);
         } else if (swapStyle === "outerHTML") {
-            processResponseNodes(target.parentElement, target, resp, after);
-            target.parentElement.removeChild(target);
+            processResponseNodes(parentElt(target), target, resp, after, selector);
+            parentElt(target).removeChild(target);
         } else if (swapStyle === "prepend") {
-            processResponseNodes(target, target.firstChild, resp, after);
+            processResponseNodes(target, target.firstChild, resp, after, selector);
         } else if (swapStyle === "prependBefore") {
-            processResponseNodes(target.parentElement, target, resp, after);
+            processResponseNodes(parentElt(target), target, resp, after, selector);
         } else if (swapStyle === "append") {
-            processResponseNodes(target, null, resp, after);
+            processResponseNodes(target, null, resp, after, selector);
         } else if (swapStyle === "appendAfter") {
-            processResponseNodes(target.parentElement, target.nextSibling, resp, after);
+            processResponseNodes(parentElt(target), target.nextSibling, resp, after, selector);
         } else {
             target.innerHTML = "";
-            processResponseNodes(target, null, resp, after);
+            processResponseNodes(target, null, resp, after, selector);
         }
     }
 
@@ -290,10 +354,11 @@ var inchTMX = inchTMX || (function(){
     */
     function triggerEvent(elt, eventName, details) {
         details["elt"] = elt;
+        var event;
         if (window.CustomEvent && typeof window.CustomEvent === 'function') {
-            var event = new CustomEvent(eventName, {detail: details});
+             event = new CustomEvent(eventName, {detail: details});
         } else {
-            var event = document.createEvent('CustomEvent');
+            event = getDocument().createEvent('CustomEvent');
             event.initCustomEvent(eventName, true, true, details);
         }
         return elt.dispatchEvent(event);
@@ -383,96 +448,169 @@ var inchTMX = inchTMX || (function(){
             var intervalStr = args[1];
             if (intervalStr) {
                 var interval = parseInterval(intervalStr);
-                // TODO store for cancelling
-                var timeout = setTimeout(function () {
-                    if (document.body.contains(elt)) {
+                nodeData.timeout = setTimeout(function () {
+                    if (getDocument().body.contains(elt)) {
                         issueAjaxRequest(elt, verb, path);
-                        processPolling(elt, verb, getAttributeValue(etl, "hx-" + verb));
+                        processPolling(elt, verb, getAttributeValue(elt, "hx-" + verb));
                     }
                 }, interval);
-                nodeData.timeout = timeout;
             }
         }
+    }
+
+    /**
+     * @param {HTMLElement} elt - 체크할 요소
+     * @returns {boolean} 주어진 요소가 로컬 링크인지 여부를 반환
+     */
+    function isLocalLink(elt) {
+        return location.hostname === elt.hostname &&
+            getRawAttribute(elt,'href') &&
+            !getRawAttribute(elt,'href').startsWith("#")
+    }
+
+    /**
+     * @param {HTMLElement} elt - 부스트할 요소
+     * @param {Object} nodeData - 노드 데이터 객체
+     * @param {string} trigger - 이벤트 트리거 (click, change 등)
+     * @description 주어진 요소가 로컬 링크(A 태그) 또는 폼 요소인 경우 해당 요소를 부스트하고 이벤트 리스너를 추가한다.
+     */
+    function boostElement(elt, nodeData, trigger) {
+        if ((elt.tagName === "A" && isLocalLink(elt)) || elt.tagName === "FORM") {
+            nodeData.boosted = true;
+            var verb, path;
+            if (elt.tagName === "A") {
+                verb = "get";
+                path = getRawAttribute(elt, 'href');
+            } else {
+                var rawAttribute = getRawAttribute(elt, "method");
+                verb = rawAttribute ? rawAttribute.toLowerCase() : "get";
+                path = getRawAttribute(elt, 'action');
+            }
+            addEventListener(elt, verb, path, nodeData, trigger, true);
+        }
+    }
+
+    /**
+     * @param {HTMLElement} elt - 바인딩된 element
+     * @param {string} verb - HTTP 동사 (GET, POST 등)
+     * @param {string} path - API 경로
+     * @param {Object} nodeData - 노드 데이터 객체
+     * @param {string} trigger - 이벤트 트리거 (click, change 등)
+     * @param {boolean} cancel - 기본 이벤트 취소 여부
+     * @description hx-get 속성을 가진 모든 요소를 재귀 방식으로 API 호출할 수 있도록 API 호출 함수를 바인딩합니다.
+     */
+    function addEventListener(elt, verb, path, nodeData, trigger, cancel) {
+        var eventListener = function (evt) {
+            if(cancel) evt.preventDefault();
+            var eventData = getInternalData(evt);
+            if (!eventData.handled) {
+                eventData.handled = true;
+                if (eventData.delayed) {
+                    clearTimeout(eventData.delayed);
+                }
+                var eventDelay = getAttributeValue(elt, "hx-delay");
+                var issueRequest = function(){
+                    issueAjaxRequest(elt, verb, path, evt.target);
+                }
+                if (eventDelay) {
+                    eventData.delayed = setTimeout(issueRequest, parseInterval(eventDelay));
+                } else {
+                    issueRequest();
+                }
+            }
+        };
+        nodeData.trigger = trigger;
+        nodeData.eventListener = eventListener;
+        elt.addEventListener(trigger, eventListener);
     }
 
     /**
      * @param {string} elt 바인딩된 element
      * @description hx-get 속성을 가진 모든 요소를 재귀 방식으로 싹다 api 호출할 수 있도록  api 호출 함수를 바인딩한다.
      */
-    function processElement(elt) {
+    function processNode(elt) {
         var nodeData = getInternalData(elt);
-        if (nodeData.processed) {
-            return;
-        } else {
+        if (!nodeData.processed) {
             nodeData.processed = true;
-        }
-
-        forEach(VERBS, function(verb){
-            var path = getAttributeValue(elt, 'hx-' + verb);
-            if (path) {
-                var trigger = getTrigger(elt);
-                if (trigger === 'load') {
-                    if (!nodeData.loaded) {
-                        nodeData.loaded = true;
-                        issueAjaxRequest(elt, verb, path);
-                    }
-                } else if (trigger.trim().indexOf('every ') === 0) {
-                    nodeData.polling = true;
-                    processPolling(elt, action, path);
-                } else {
-                    var eventListener = function (evt) {
-                        var eventData = getInternalData(evt);
-                        if (!eventData.handled) {
-                            eventData.handled = true;
-                            issueAjaxRequest(elt, verb, path, evt.target);
+            var trigger = getTrigger(elt);
+            var explicitAction = false;
+            forEach(VERBS, function(verb){
+                var path = getAttributeValue(elt, 'hx-' + verb);
+                if (path) {
+                    explicitAction = true;
+                    if (trigger === 'load') {
+                        if (!nodeData.loaded) {
+                            nodeData.loaded = true;
+                            issueAjaxRequest(elt, verb, path);
                         }
-                    };
-                    nodeData.trigger = trigger;
-                    nodeData.eventListener = eventListener;
-                    elt.addEventListener(trigger, eventListener);
+                    } else if (trigger.trim().indexOf('every ') === 0) {
+                        nodeData.polling = true;
+                        processPolling(elt, verb, path);
+                    } else {
+                        addEventListener(elt, verb, path, nodeData, trigger);
+                    }
                 }
-                return;
+            });
+            if (!explicitAction && getClosestAttributeValue(elt, "hx-boost") === "true") {
+                boostElement(elt, nodeData, trigger);
             }
-        });
-        if (getAttributeValue(elt, 'hx-add-class')) {
-            processClassList(elt, getAttributeValue(elt, 'hx-add-class'), "add");
+            if (getAttributeValue(elt, 'hx-add-class')) {
+                processClassList(elt, getAttributeValue(elt, 'hx-add-class'), "add");
+            }
+            if (getAttributeValue(elt, 'hx-remove-class')) {
+                processClassList(elt, getAttributeValue(elt, 'hx-remove-class'), "remove");
+            }
         }
-        if (getAttributeValue(elt, 'hx-remove-class')) {
-            processClassList(elt, getAttributeValue(elt, 'hx-remove-class'), "remove");
-        }
-        forEach(elt.children, function(child) { processElement(child) });
+        forEach(elt.children, function(child) { processNode(child) });
     }
 
-
+    /**
+     * @returns {string} 새로운 고유한 히스토리 ID를 생성하여 반환
+     */
     function makeHistoryId() {
         return Math.random().toString(36).substr(3, 9);
     }
 
+    /**
+     * @returns {HTMLElement} 히스토리 요소를 반환
+     * 페이지에 'hx-history-element' 클래스를 가진 요소가 존재하면 해당 요소를 반환하고, 그렇지 않으면 body를 반환
+     */
     function getHistoryElement() {
-        var historyElt = document.getElementsByClassName('hx-history-element');
+        var historyElt = getDocument().getElementsByClassName('hx-history-element');
         if (historyElt.length > 0) {
             return historyElt[0];
         } else {
-            return document.body;
+            return getDocument().body;
         }
     }
 
+    /**
+     * @param {Object} historyData - 로컬 스토리지에 저장될 히스토리 데이터
+     * @description 로컬 스토리지에 히스토리 데이터를 저장
+     */
     function saveLocalHistoryData(historyData) {
         localStorage.setItem('hx-history', JSON.stringify(historyData));
     }
 
+    /**
+     * @returns {Object} 로컬 스토리지에서 히스토리 데이터를 가져와 반환
+     */
     function getLocalHistoryData() {
         var historyEntry = localStorage.getItem('hx-history');
+        var historyData;
         if (historyEntry) {
-            var historyData = JSON.parse(historyEntry);
+            historyData = JSON.parse(historyEntry);
         } else {
             var initialId = makeHistoryId();
-            var historyData = {"current": initialId, "slots": [initialId]};
+            historyData = {"current": initialId, "slots": [initialId]};
             saveLocalHistoryData(historyData);
         }
         return historyData;
     }
 
+    /**
+     * @description 새로운 히스토리 데이터를 생성하고 로컬 스토리지에 저장
+     */
     function newHistoryData() {
         var historyData = getLocalHistoryData();
         var newId = makeHistoryId();
@@ -486,13 +624,28 @@ var inchTMX = inchTMX || (function(){
         saveLocalHistoryData(historyData);
     }
 
+    /**
+     * @description 현재 히스토리 내용을 업데이트하고 로컬 스토리지에 저장
+     */
     function updateCurrentHistoryContent() {
         var elt = getHistoryElement();
         var historyData = getLocalHistoryData();
-        history.replaceState({"hx-history-key": historyData.current}, document.title, window.location.href);
+        history.replaceState({"hx-history-key": historyData.current}, getDocument().title, window.location.href);
         localStorage.setItem('hx-history-' + historyData.current, elt.innerHTML);
     }
+    /**
+     * @param {HTMLElement} elt - 체크할 요소
+     * @returns {boolean} 푸시(push) 이벤트를 수행해야 하는지 여부를 반환
+     */
+    function shouldPush(elt) {
+        return getClosestAttributeValue(elt, "hx-push-url") === "true" ||
+            (elt.tagName === "A" && getInternalData(elt).boosted);
+    }
 
+    /**
+     * @param {Object} data - 복원할 히스토리 데이터
+     * @description 주어진 히스토리 데이터를 사용하여 페이지의 히스토리를 복원
+     */
     function restoreHistory(data) {
         var historyKey = data['hx-history-key'];
         var content = localStorage.getItem('hx-history-' + historyKey);
@@ -501,15 +654,23 @@ var inchTMX = inchTMX || (function(){
         processResponseNodes(elt, null, content);
     }
 
+    /**
+     * @param {HTMLElement} elt - 스냅샷을 찍을 요소
+     * @description 현재 히스토리 엔트리에 대한 스냅샷을 찍는다.
+     */
     function snapshotForCurrentHistoryEntry(elt) {
-        if (getClosestAttributeValue(elt, "hx-push-url") === "true") {
-            // TODO event to allow deinitialization of HTML elements in target
+        if (shouldPush(elt)) {
             updateCurrentHistoryContent();
         }
     }
 
+    /**
+     * @param {HTMLElement} elt - 새로운 히스토리 엔트리를 초기화할 요소
+     * @param {string} url - 히스토리에 추가될 URL
+     * @description 주어진 요소가 푸시(push) 이벤트를 수행해야 하는 경우 새로운 히스토리 엔트리를 초기화
+     */
     function initNewHistoryEntry(elt, url) {
-        if (getClosestAttributeValue(elt, "hx-push-url") === "true") {
+        if (shouldPush(elt)) {
             newHistoryData();
             history.pushState({}, "", url);
             updateCurrentHistoryContent();
@@ -540,7 +701,7 @@ var inchTMX = inchTMX || (function(){
     function mutateRequestIndicatorClasses(elt, action) {
         var indicator = getClosestAttributeValue(elt, 'hx-indicator');
         if (indicator) {
-            var indicators = document.querySelectorAll(indicator);
+            var indicators = getDocument().querySelectorAll(indicator);
         } else {
             indicators = [elt];
         }
@@ -577,7 +738,7 @@ var inchTMX = inchTMX || (function(){
         } else {
             processed.push(elt);
         }
-        var name = elt.getAttribute("name");
+        var name = getRawAttribute(elt,"name");
         var value = elt.value;
         if (name && value) {
             var current = values[name];
@@ -593,9 +754,9 @@ var inchTMX = inchTMX || (function(){
         }
         if (matches(elt, 'form')) {
             var inputs = elt.elements;
-            for (var i = 0; i < inputs.length; i++) {
-                processInputValue(processed, values, inputs[i]);
-            }
+            forEach(inputs, function(input) {
+                processInputValue(processed, values, input);
+            });
         }
     }
 
@@ -607,20 +768,18 @@ var inchTMX = inchTMX || (function(){
     function getInputValues(elt) {
         var processed = [];
         var values = {};
-
         processInputValue(processed, values, elt);
 
         var includes = getAttributeValue(elt, "hx-include");
         if (includes) {
-            var nodes = document.querySelectorAll(includes);
-            for (var i = 0; i < nodes.length; i++) {
-                var node = nodes[i];
+            var nodes = getDocument().querySelectorAll(includes);
+            forEach(nodes, function(node) {
                 processInputValue(processed, values, node);
-            }
+            });
         }
 
         processInputValue(processed, values, closest(elt, 'form'));
-        return Object.keys(values).length == 0 ? null : values;
+        return Object.keys(values).length === 0 ? null : values;
     }
 
     /**
@@ -652,9 +811,9 @@ var inchTMX = inchTMX || (function(){
             if (values.hasOwnProperty(name)) {
                 var value = values[name];
                 if (Array.isArray(value)) {
-                    for (var i = 0; i < value.length; i++) {
-                        returnStr = appendParam(returnStr, name, value[i]);
-                    }
+                    forEach(value, function(v) {
+                        returnStr = appendParam(returnStr, name, v);
+                    });
                 } else {
                     returnStr = appendParam(returnStr, name, value);
                 }
@@ -707,11 +866,11 @@ var inchTMX = inchTMX || (function(){
 
             var xhr = new XMLHttpRequest();
 
-            var inputVals = getInputValues(elt);
-            if(!triggerEvent(elt, 'values.hx', {values: inputVals, target:target})) return endRequestLock();
+            var inputValues = getInputValues(elt);
+            if(!triggerEvent(elt, 'values.hx', {values: inputValues, target:target})) return endRequestLock();
 
             if (verb === 'get') {
-                xhr.open('GET', path + (inputVals ? "?" + urlEncode(inputVals) : ""), true);
+                xhr.open('GET', path + (inputValues ? "?" + urlEncode(inputValues) : ""), true);
             } else {
                 xhr.open('POST', path, true);
                 setHeader(xhr,'Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8', true);
@@ -723,20 +882,20 @@ var inchTMX = inchTMX || (function(){
             xhr.overrideMimeType("text/html");
 
             setHeader(xhr, "Request", "true");
-            setHeader(xhr,"Trigger-Id", elt.getAttribute("id"));
-            setHeader(xhr,"Trigger-Name", elt.getAttribute("name"));
-            setHeader(xhr,"Target-Id", target.getAttribute("id"));
-            setHeader(xhr,"Current-URL", document.location.href);
+            setHeader(xhr,"Trigger-Id", getRawAttribute(elt,"id"));
+            setHeader(xhr,"Trigger-Name", getRawAttribute(elt, "name"));
+            setHeader(xhr,"Target-Id", getRawAttribute(target,"id"));
+            setHeader(xhr,"Current-URL", getDocument().location.href);
             if (prompt) {
                 setHeader(xhr,"Prompt", prompt);
             }
             if (eventTarget) {
-                setHeader(xhr,"Event-Target", eventTarget.getAttribute("id"));
+                setHeader(xhr,"Event-Target", getRawAttribute(eventTarget,"id"));
             }
-            if (document.activeElement) {
-                setHeader(xhr,"Active-Element", document.activeElement.getAttribute("id"));
-                if (document.activeElement.value) {
-                    setHeader(xhr,"Active-Element-Value", document.activeElement.value);
+            if (getDocument().activeElement) {
+                setHeader(xhr,"Active-Element", getRawAttribute(getDocument().activeElement,"id"));
+                if (getDocument().activeElement.value) {
+                    setHeader(xhr,"Active-Element-Value", getDocument().activeElement.value);
                 }
             }
 
@@ -749,7 +908,7 @@ var inchTMX = inchTMX || (function(){
                     initNewHistoryEntry(elt, path);
                     if (this.status >= 200 && this.status < 400) {
                         // don't process 'No Content' response
-                        if (this.status != 204) {
+                        if (this.status !== 204) {
                             // Success!
                             var resp = this.response;
                             if(!triggerEvent(elt, 'beforeSwap.hx', {xhr:xhr, target:target})) return;
@@ -774,21 +933,21 @@ var inchTMX = inchTMX || (function(){
                 endRequestLock();
             };
 
-            if(!triggerEvent(elt, 'beforeRequest.hx', {xhr:xhr, values: inputVals, target:target})) return endRequestLock();
+            if(!triggerEvent(elt, 'beforeRequest.hx', {xhr:xhr, values: inputValues, target:target})) return endRequestLock();
             addRequestIndicatorClasses(elt);
-            xhr.send(verb === 'get' ? null : urlEncode(inputVals));
+            xhr.send(verb === 'get' ? null : urlEncode(inputValues));
     }
 
     function ready(fn) {
-        if(document.readyState != 'loading'){
+        if (getDocument().readyState !== 'loading') {
             fn();
         } else {
-            document.addEventListener('DOMContentLoaded', fn);
+            getDocument().addEventListener('DOMContentLoaded', fn);
         }
     }
 
     ready(function () {
-        processElement(document.body);
+        processNode(getDocument().body);
         window.onpopstate = function (event) {
             restoreHistory(event.state);
         };
@@ -800,7 +959,7 @@ var inchTMX = inchTMX || (function(){
     
     // Public API
     return {
-        processElement : processElement,
+        processElement: processNode,
         version: "0.0.1",
         _:internalEval
     }

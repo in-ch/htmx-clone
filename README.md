@@ -101,7 +101,16 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 
 ### htmx 초기 세팅(9) - ic-swap-direct, swap style merge 추가
 
-- commit: 
+- commit: 7291039584f354d7a5500631ceeefe7ba6d7a27b
 
 1. <code>ic-swap-direct</code>가 추가되었다. 원래 swap을 할 때 <code>processElement</code>를 거치게 되는데 이 옵션이 있다면 바로 swap을 해버린다.
 2. <code>swap</code> 스타일에 <code>merge</code>가 추가되었다.
+
+### htmx 초기 세팅(10) 
+
+- commit: 
+
+1. `hx-boost` 속성이 추가되었다.
+2. `processElement`가 `processNode`로 이름이 변경되었다. 
+3. `hx-select` 속성이 추가되었다.
+4. `hx-delay` 속성이 추가되었다.
