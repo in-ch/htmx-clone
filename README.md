@@ -106,11 +106,19 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 1. <code>ic-swap-direct</code>가 추가되었다. 원래 swap을 할 때 <code>processElement</code>를 거치게 되는데 이 옵션이 있다면 바로 swap을 해버린다.
 2. <code>swap</code> 스타일에 <code>merge</code>가 추가되었다.
 
-### htmx 초기 세팅(10) 
+### htmx 초기 세팅 (10) - hx-boost, hx-select, hx-delay 속성 추가
 
-- commit: 
+- commit: 8f8dec9e3b0a3d9d59e6b017b2edc5e73b846de8
 
 1. `hx-boost` 속성이 추가되었다.
 2. `processElement`가 `processNode`로 이름이 변경되었다. 
 3. `hx-select` 속성이 추가되었다.
 4. `hx-delay` 속성이 추가되었다.
+
+### htmx 초기 세팅 (11) - hx-trigger-once, hx-trigger-changed-only, hx-trigger, hx-reveal 속성 추가
+
+- commit: 
+
+1. `hx-trigger-once` & `hx-trigger-changed-only` 속성 추가 
+   추후에 [trigger 문서](https://htmx.org/attributes/hx-trigger/)로 미뤄보았을 때 전부 `hx-trigger`로 통합되는 듯 하다.
+2. `hx-reveal` 속성이 추가됐는데 이건 요소가 사용자 화면에 등장했을 때만 ajax 요청을 날릴 수 있도록 하는 속성이다.

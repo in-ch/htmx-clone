@@ -46,14 +46,14 @@ var inchTMX = inchTMX || (function(){
 
     /**
      * @param {HTMLElement} elt element
-     * @return {HTMLElement} 해당 elt의 부모 element를 반환한다.
+     * @returns {HTMLElement} 해당 elt의 부모 element를 반환한다.
     */
     function parentElt(elt) {
         return elt.parentElement;
     }
 
     /**
-     * @return {Document} document 객체를 리턴한다. 
+     * @returns {Document} document 객체를 리턴한다. 
     */
     function getDocument() {
         return document;
@@ -93,7 +93,7 @@ var inchTMX = inchTMX || (function(){
      * @param {string} elt 검사할 element
      * @param {string} selector 태그 이름
      * @description 태그가 일치하면 true, 일치하지 않으면 false
-     * @return {boolean} 결과값
+     * @returns {boolean} 결과값
     */
     function matches(elt, selector) {
         return (elt != null) &&(elt.matches || elt.matchesSelector || elt.msMatchesSelector || elt.mozMatchesSelector
@@ -120,8 +120,27 @@ var inchTMX = inchTMX || (function(){
     }
 
     /**
+     * @param {object} o 객체
+     * @param {string} type 타입
+     * @description 객체가 type에 입력한 타입이 맞는지 검사
+     * @returns {boolean}
+     */
+    function isType(o, type) {
+        return Object.prototype.toString.call(o) === "[object " + type + "]";
+    }
+
+    /**
+     * @param {object} o 객체
+     * @description 객체의 type이 Function인지 확인
+     * @returns {boolean}
+     */
+    function isFunction(o) {
+        return isType(o, "Function");
+    }
+
+    /**
      * @param {string} o [object Object] 인지 검사
-     * @return {boolean} rawObject이면 true, 아니면 false 
+     * @returns {boolean} rawObject이면 true, 아니면 false 
      */
      function isRawObject(o){
         return Object.prototype.toString.call(o) === "[object Object]";
@@ -161,6 +180,21 @@ var inchTMX = inchTMX || (function(){
         for (var i = 0; i < arr.length; i++) {
             func(arr[i]);
         }
+    }
+
+    /**
+     * @param {element} el DOM 요소
+     * @description getBoundingClientRect() 메서드는 DOM 요소의 위치와 크기에 대한 정보를 제공하는 메서드. 
+     *              이 메서드를 사용하면 해당 요소가 뷰포트(Viewport)에 대해 어디에 위치하고 있는지, 
+     *              그리고 얼마나 큰지에 대한 정보를 얻을 수 있다.
+     *              해당 요소가 현재 뷰포트에 보이는지 검사
+     * @return {boolean}
+    */
+    function isScrolledIntoView(el) {
+        var rect = el.getBoundingClientRect();
+        var elemTop = rect.top;
+        var elemBottom = rect.bottom;
+        return elemTop < window.innerHeight && elemBottom >= 0;
     }
 
     /**
@@ -242,7 +276,7 @@ var inchTMX = inchTMX || (function(){
     /**
      * @param {HTMLElement} elt 엘리먼트
      * @param {HTMLElement[]} possible match가 가능한 엘리먼트 배열
-     * @return {HTMLElement[] | null} 
+     * @returns {HTMLElement[] | null} 
     */
     function findMatch(elt, possible) {
         for (var i = 0; i < possible.length; i++) {
@@ -260,7 +294,7 @@ var inchTMX = inchTMX || (function(){
     /**
      * @param {HTMLElement} mergeTo 엘리먼트
      * @param {HTMLElement} mergeFrom 엘리먼트
-     * @return {HTMLElement} 
+     * @returns {HTMLElement} 
     */
     function cloneAttributes(mergeTo, mergeFrom) {
         forEach(mergeTo.attributes, function (attr) {
@@ -499,21 +533,36 @@ var inchTMX = inchTMX || (function(){
      * @param {boolean} cancel - 기본 이벤트 취소 여부
      * @description hx-get 속성을 가진 모든 요소를 재귀 방식으로 API 호출할 수 있도록 API 호출 함수를 바인딩합니다.
      */
-    function addEventListener(elt, verb, path, nodeData, trigger, cancel) {
+     function addEventListener(elt, verb, path, nodeData, trigger, cancel) {
         var eventListener = function (evt) {
             if(cancel) evt.preventDefault();
             var eventData = getInternalData(evt);
+            var elementData = getInternalData(elt);
             if (!eventData.handled) {
                 eventData.handled = true;
-                if (eventData.delayed) {
-                    clearTimeout(eventData.delayed);
+                if (getAttributeValue(elt, "hx-trigger-once") === "true") {
+                    if (elementData.triggeredOnce) {
+                        return;
+                    } else {
+                        elementData.triggeredOnce = true;
+                    }
                 }
-                var eventDelay = getAttributeValue(elt, "hx-delay");
+                if (getAttributeValue(elt, "hx-trigger-changed-only") === "true") {
+                    if (elementData.lastValue === elt.value) {
+                        return;
+                    } else {
+                        elementData.lastValue = elt.value;
+                    }
+                }
+                if (elementData.delayed) {
+                    clearTimeout(elementData.delayed);
+                }
+                var eventDelay = getAttributeValue(elt, "hx-trigger-delay");
                 var issueRequest = function(){
                     issueAjaxRequest(elt, verb, path, evt.target);
                 }
                 if (eventDelay) {
-                    eventData.delayed = setTimeout(issueRequest, parseInterval(eventDelay));
+                    elementData.delayed = setTimeout(issueRequest, parseInterval(eventDelay));
                 } else {
                     issueRequest();
                 }
@@ -522,6 +571,37 @@ var inchTMX = inchTMX || (function(){
         nodeData.trigger = trigger;
         nodeData.eventListener = eventListener;
         elt.addEventListener(trigger, eventListener);
+    }
+
+    /**
+     * @description 스크롤 이벤트 핸들러 초기화 함수
+     *              "hx-trigger" 속성이 "reveal"인 요소들에 대해 반복하면서
+     *              maybeReveal 함수 호출
+     * @return {void}
+    */
+    function initScrollHandler() {
+        if (!window['hxScrollHandler']) {
+            var scrollHandler = function() {
+                forEach(getDocument().querySelectorAll("[hx-trigger='reveal']"), function (elt) {
+                    maybeReveal(elt);
+                });
+            };
+            window['hxScrollHandler'] = scrollHandler;
+            window.addEventListener("scroll", scrollHandler)
+        }
+    }
+
+    /**
+     * @param {element} elt DOM 요소
+     * @description 특정 요소가 화면에 나타났을 때 처리할 함수
+     *              요소가 나타났을 때만 Ajax 요청 발생
+    */
+    function maybeReveal(elt) {
+        var nodeData = getInternalData(elt);
+        if (!nodeData.revealed && isScrolledIntoView(elt)) {
+            nodeData.revealed = true;
+            issueAjaxRequest(elt, nodeData.verb, nodeData.path);
+        }
     }
 
     /**
@@ -537,8 +617,13 @@ var inchTMX = inchTMX || (function(){
             forEach(VERBS, function(verb){
                 var path = getAttributeValue(elt, 'hx-' + verb);
                 if (path) {
+                    nodeData.path = path;
+                    nodeData.verb = verb;
                     explicitAction = true;
-                    if (trigger === 'load') {
+                    if (trigger === 'revealed') {
+                        initScrollHandler();
+                        maybeReveal(elt);
+                    } else if (trigger === 'load') {
                         if (!nodeData.loaded) {
                             nodeData.loaded = true;
                             issueAjaxRequest(elt, verb, path);
@@ -562,6 +647,87 @@ var inchTMX = inchTMX || (function(){
             }
         }
         forEach(elt.children, function(child) { processNode(child) });
+    }
+
+    /**
+     * @param {element} elt DOM 요소
+     * @param {string} eventName 이벤트 이름
+     * @param {string} details 에러 상세 내용
+     * @description 에러를 보낸다.
+     * @return {void}
+    */
+    function sendError(elt, eventName, details) {
+        var errorURL = getClosestAttributeValue(elt, "hx-error-url");
+        if (errorURL) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", errorURL);
+            xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+            xhr.send(JSON.stringify({ "elt": elt.id, "event": eventName, "details" : details }));
+        }
+    }
+
+    /**
+     * @param {string} eventName 이벤트 이름
+     * @param {string} details 상세 내용
+     * @description 이벤트를 만든다. 
+     * @return {CustomEvent} 커스텀 이벤트 객체
+    */
+    function makeEvent(eventName, details) {
+        var evt;
+        if (window.CustomEvent && typeof window.CustomEvent === 'function') {
+            evt = new CustomEvent(eventName, {detail: details});
+        } else {
+            evt = getDocument().createEvent('CustomEvent');
+            evt.initCustomEvent(eventName, true, true, details);
+        }
+        return evt;
+    }
+
+
+    /**
+     * @param {element} elt DOM 요소
+     * @param {string} eventName 이벤트 이름
+     * @param {string} details 이벤트 상세 내용
+     * @description 이벤트를 트리거(발동)시킨다.
+     *              dispatchEvent 메서드는 DOM 요소에 이벤트를 프로그래밍 방식으로 발송(dispatch)하는 메서드이다.
+     * @return {void}
+    */
+    function triggerEvent(elt, eventName, details) {
+        details["elt"] = elt;
+        var event = makeEvent(eventName, details);
+        if (HTMx.logger) {
+            HTMx.logger(elt, eventName, details);
+            if (eventName.indexOf("Error") > 0) {
+                sendError(elt, eventName, details);
+            }
+        }
+        var eventResult = elt.dispatchEvent(event);
+        var allResult = elt.dispatchEvent(makeEvent("all.hx", {elt:elt, originalDetails:details, originalEvent: event}));
+        return eventResult && allResult;
+    }
+
+    /**
+     * @param arg1
+     * @param arg2
+     * @param arg3
+     * @description 이벤트 리스너를 연결한다.
+    */
+    function addHTMxEventListener(arg1, arg2, arg3) {
+        var target, event, listener;
+        if (isFunction(arg1)) {
+            target = getDocument().body;
+            event = "all.hx";
+            listener = arg1;
+        } else if (isFunction(arg2)) {
+            target = getDocument().body;
+            event = arg1;
+            listener = arg2;
+        } else {
+            target = arg1;
+            event = arg2;
+            listener = arg3;
+        }
+        return target.addEventListener(event, listener);
     }
 
     /**
@@ -779,7 +945,7 @@ var inchTMX = inchTMX || (function(){
         }
 
         processInputValue(processed, values, closest(elt, 'form'));
-        return Object.keys(values).length === 0 ? null : values;
+        return values;
     }
 
     /**
@@ -870,7 +1036,8 @@ var inchTMX = inchTMX || (function(){
             if(!triggerEvent(elt, 'values.hx', {values: inputValues, target:target})) return endRequestLock();
 
             if (verb === 'get') {
-                xhr.open('GET', path + (inputValues ? "?" + urlEncode(inputValues) : ""), true);
+                var noValues = Object.keys(inputValues).length === 0;
+                xhr.open('GET', path + (noValues ? "" : "?" + urlEncode(inputValues)), true);
             } else {
                 xhr.open('POST', path, true);
                 setHeader(xhr,'Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8', true);
@@ -901,7 +1068,7 @@ var inchTMX = inchTMX || (function(){
 
             xhr.onload = function () {
                 try {
-                    if(!triggerEvent(elt, 'beforeOnLoad.hx', {xhr:xhr, target:target})) return;
+                    if (!triggerEvent(elt, 'beforeOnLoad.hx', {xhr: xhr, target: target})) return;
                     snapshotForCurrentHistoryEntry(elt, path);
                     var trigger = this.getResponseHeader("X-HX-Trigger");
                     handleTrigger(elt, trigger);
@@ -911,21 +1078,39 @@ var inchTMX = inchTMX || (function(){
                         if (this.status !== 204) {
                             // Success!
                             var resp = this.response;
-                            if(!triggerEvent(elt, 'beforeSwap.hx', {xhr:xhr, target:target})) return;
-                            swapResponse(target, elt, resp, function(){
-                                updateCurrentHistoryContent();
-                                triggerEvent(elt, 'afterSwap.hx', {xhr:xhr, target:target});
-                            });
+                            if (!triggerEvent(elt, 'beforeSwap.hx', {xhr: xhr, target: target})) return;
+                            target.classList.add("hx-swapping");
+                            var doSwap = function () {
+                                try {
+                                    swapResponse(target, elt, resp, function () {
+                                        target.classList.remove("hx-swapping");
+                                        updateCurrentHistoryContent();
+                                        triggerEvent(elt, 'afterSwap.hx', {xhr: xhr, target: target});
+                                    });
+                                } catch (e) {
+                                    triggerEvent(elt, 'swapError.hx', {xhr: xhr, response: xhr.response, status: xhr.status, target: target});
+                                    throw e;
+                                }
+                            };
+                            var swapDelayStr = getAttributeValue(elt, "hx-swap-delay");
+                            if (swapDelayStr) {
+                                setTimeout(doSwap, parseInterval(swapDelayStr))
+                            } else {
+                                doSwap();
+                            }
                         }
                     } else {
-                        triggerEvent(elt, 'errorResponse.hx', {xhr:xhr, response: xhr.response, status: xhr.status, target:target});
+                        triggerEvent(elt, 'responseError.hx', {xhr: xhr, response: xhr.response, status: xhr.status, target: target});
                     }
+                } catch (e) {
+                    triggerEvent(elt, 'onLoadError.hx', {xhr: xhr, response: xhr.response, status: xhr.status, target: target});
+                    throw e;
                 } finally {
                     removeRequestIndicatorClasses(elt);
-                    triggerEvent(elt, 'afterOnLoad.hx', {xhr:xhr, response: xhr.response, status: xhr.status, target:target});
                     endRequestLock();
+                    triggerEvent(elt, 'afterOnLoad.hx', {xhr: xhr, response: xhr.response, status: xhr.status, target: target});
                 }
-            };
+            }
 
             xhr.onerror = function () {
                 removeRequestIndicatorClasses(elt);
