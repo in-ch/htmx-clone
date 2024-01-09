@@ -117,8 +117,17 @@ INCH 객체가 반환되어 전역 변수 INCH에 할당
 
 ### htmx 초기 세팅 (11) - hx-trigger-once, hx-trigger-changed-only, hx-trigger, hx-reveal 속성 추가
 
-- commit: 
+- commit: 440dbc14389c6725a9a45ac51e1c68d02695afff
 
 1. `hx-trigger-once` & `hx-trigger-changed-only` 속성 추가 
    추후에 [trigger 문서](https://htmx.org/attributes/hx-trigger/)로 미뤄보았을 때 전부 `hx-trigger`로 통합되는 듯 하다.
 2. `hx-reveal` 속성이 추가됐는데 이건 요소가 사용자 화면에 등장했을 때만 ajax 요청을 날릴 수 있도록 하는 속성이다.
+
+### htmx 초기 세팅 (12) - sse 기능 추가
+
+- commit: 
+
+1. sse 기능이 추가되었다.
+   SSE는 웹소켓과 달리, Client가 Server로부터 데이터만 받을 수 있는 방식
+
+### v0.0.1 릴리즈 
